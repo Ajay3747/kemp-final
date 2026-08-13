@@ -29,15 +29,21 @@ const orderRoutes = require('./routes/orderRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const ratingRoutes = require('./routes/ratingRoutes');
+const bloodRequestRoutes = require('./routes/bloodRequestRoutes');
 const { verifyEmailTransport } = require('./utils/emailService');
 const { verifyTwilioConfig } = require('./utils/smsService');
 const { warmUp: warmUpPersonDetector } = require('./services/imageModeration/localPersonDetector');
+const { startWarrantyReminderJob } = require('./jobs/warrantyReminderJob');
 app.use('/api/auth', authRoutes);
 
 // Downloads/loads the person-detection model in the background now, so the
 // first real listing-image upload isn't the one that pays the ~10s+
 // cold-start cost.
 warmUpPersonDetector();
+
+// Daily check for warranties entering their "expiring soon" window.
+startWarrantyReminderJob();
 
 (async () => {
   try {
@@ -55,6 +61,8 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/ratings', ratingRoutes);
+app.use('/api/blood-requests', bloodRequestRoutes);
 
 // Test endpoint
 app.get('/api/test', (req, res) => {

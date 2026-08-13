@@ -71,8 +71,42 @@ const requireAdmin = (req, res, next) => {
     });
 };
 
+// Gate for endpoints an admin OR the (existing but previously unused)
+// 'staff' role should reach — e.g. creating/managing a blood request.
+// Mirrors requireAdmin exactly, just with a wider role check, and sets
+// req.privilegedUser the same way requireAdmin sets req.adminUser.
+const requireStaffOrAdmin = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+
+    if (!authHeader) {
+        return res.status(401).json({ message: 'No token provided, authorization denied.' });
+    }
+
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+
+    jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
+        if (err) {
+            return res.status(401).json({ message: 'Token is not valid, authorization denied.' });
+        }
+
+        try {
+            const user = await User.findById(decoded.userId);
+            if (!user || (user.role !== 'admin' && user.role !== 'staff')) {
+                return res.status(403).json({ message: 'Staff or admin access required.' });
+            }
+
+            req.user = decoded;
+            req.privilegedUser = user;
+            next();
+        } catch (error) {
+            return res.status(500).json({ message: 'Server Error', error: error.message });
+        }
+    });
+};
+
 module.exports = {
     isAuthenticated,
     attachUserIfPresent,
     requireAdmin,
+    requireStaffOrAdmin,
 };

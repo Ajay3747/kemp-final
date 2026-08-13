@@ -34,6 +34,11 @@ const orderSchema = new mongoose.Schema({
   // Set the moment the seller accepts — the seller's phone number is only
   // ever revealed to the buyer once this is set, regardless of later status.
   acceptedAt: { type: Date, default: null },
+  // Set the moment the order becomes COMPLETED — this is the purchase/
+  // warranty-start date used by "My Warranties". COMPLETED is a terminal
+  // status (see orderStatus.js), so this is set exactly once and never
+  // overwritten afterward.
+  completedAt: { type: Date, default: null },
 
   // Per-side "removed from history" flags. This is a visibility toggle only —
   // it never touches status/product fields, so a deleted history record still

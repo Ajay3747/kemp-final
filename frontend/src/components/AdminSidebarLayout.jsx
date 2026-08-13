@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Package, Handshake, Flag, Tags, Megaphone,
-  BarChart3, LogOut, Menu, X, ShieldCheck, Droplet
+  BarChart3, LogOut, Menu, X, ShieldCheck, Droplet, HeartHandshake
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { label: 'Orders / Deals', path: '/admin/orders', icon: Handshake },
   { label: 'Reports', path: '/admin/reports', icon: Flag },
   { label: 'Blood Donors', path: '/admin/blood-donors', icon: Droplet },
+  { label: 'Blood Requests', path: '/admin/blood-requests', icon: HeartHandshake },
   { label: 'Categories', path: '/admin/categories', icon: Tags },
   { label: 'Announcements', path: '/admin/announcements', icon: Megaphone },
   { label: 'Analytics', path: '/admin/analytics', icon: BarChart3 }

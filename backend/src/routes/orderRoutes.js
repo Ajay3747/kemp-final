@@ -7,6 +7,7 @@ const router = express.Router();
 router.post('/', isAuthenticated, orderController.createOrder);
 router.get('/buyer', isAuthenticated, orderController.getBuyerOrders);
 router.get('/seller', isAuthenticated, orderController.getSellerOrders);
+router.get('/warranties/mine', isAuthenticated, orderController.getMyWarranties);
 router.get('/:orderId', isAuthenticated, orderController.getOrder);
 router.patch('/:orderId/status', isAuthenticated, orderController.updateOrderStatus);
 router.patch('/:orderId/cancel', isAuthenticated, orderController.cancelOrder);

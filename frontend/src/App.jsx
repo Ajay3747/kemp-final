@@ -9,6 +9,8 @@ import AdminListings from "./pages/AdminListings";
 import AdminOrders from "./pages/AdminOrders";
 import AdminReports from "./pages/AdminReports";
 import AdminBloodDonors from "./pages/AdminBloodDonors";
+import AdminBloodRequests from "./pages/AdminBloodRequests";
+import BloodRequestDetail from "./pages/BloodRequestDetail";
 import AdminCategories from "./pages/AdminCategories";
 import AdminAnnouncements from "./pages/AdminAnnouncements";
 import AdminAnalytics from "./pages/AdminAnalytics";
@@ -107,6 +109,11 @@ function AppContent() {
           <Route
             path="/admin/blood-donors"
             element={<AdminBloodDonors />}
+          />
+
+          <Route
+            path="/admin/blood-requests"
+            element={<AdminBloodRequests />}
           />
 
           <Route
@@ -210,6 +217,19 @@ function AppContent() {
                 <Navbar />
                 <main className="container mx-auto p-4">
                   <MyOrders />
+                </main>
+                <Footer />
+              </>
+            }
+          />
+
+          <Route
+            path="/blood-requests/:id"
+            element={
+              <>
+                <Navbar />
+                <main className="container mx-auto p-4">
+                  <BloodRequestDetail />
                 </main>
                 <Footer />
               </>

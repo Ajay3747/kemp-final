@@ -110,7 +110,11 @@ export default function Notifications() {
     if (!notification.isRead) {
       markAsRead(notification._id);
     }
-    if (notification.metadata?.orderId) {
+    if (notification.metadata?.bloodRequestId) {
+      navigate(`/blood-requests/${notification.metadata.bloodRequestId}`);
+    } else if (notification.metadata?.warrantyOrderId) {
+      navigate(`/my-orders?tab=warranties`);
+    } else if (notification.metadata?.orderId) {
       navigate(`/my-orders?orderId=${notification.metadata.orderId}`);
     } else if (notification.type === 'message' && notification.metadata?.conversationId) {
       navigate(`/chat/${notification.metadata.conversationId}`);

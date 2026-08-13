@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Package, User, Calendar, Check, ArrowRight, X, ShoppingBag, ClipboardList, Mail, Phone, Trash2 } from 'lucide-react';
+import { Package, User, Calendar, Check, ArrowRight, X, ShoppingBag, ClipboardList, Mail, Phone, Trash2, Star, ShieldCheck } from 'lucide-react';
 import OrderDetailModal from '../components/OrderDetailModal';
+import RateSellerModal from '../components/RateSellerModal';
+import { getMyRatings } from '../utils/ratingApi';
+import { getMyWarranties } from '../utils/warrantyApi';
 
 const API_URL = "http://localhost:5000/api";
 
@@ -17,14 +20,25 @@ const STATUS_BADGE_STYLES = {
 
 const CANCELLABLE_BUYER_STATUSES = ['PENDING', 'ACCEPTED', 'PROCESSING'];
 
+const WARRANTY_STATUS_STYLES = {
+  Active: 'bg-green-500/20 border-green-500/50 text-green-300',
+  'Expiring Soon': 'bg-amber-500/20 border-amber-500/50 text-amber-300',
+  Expired: 'bg-red-500/20 border-red-500/50 text-red-300',
+  Unknown: 'bg-white/10 border-white/20 text-white/70'
+};
+
 export default function MyOrders() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const highlightId = searchParams.get('orderId');
 
-  const [activeTab, setActiveTab] = useState(searchParams.get('tab') === 'purchase' ? 'purchase' : 'selling');
+  const initialTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(
+    initialTab === 'purchase' ? 'purchase' : initialTab === 'warranties' ? 'warranties' : 'selling'
+  );
   const [sellingOrders, setSellingOrders] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
+  const [warranties, setWarranties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [updatingId, setUpdatingId] = useState(null);
@@ -32,10 +46,12 @@ export default function MyOrders() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [deleting, setDeleting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [myRatingsByOrder, setMyRatingsByOrder] = useState({});
+  const [rateModalOrder, setRateModalOrder] = useState(null);
   const autoOpenedRef = useRef(false);
   const highlightRef = useRef(null);
 
-  const currentList = activeTab === 'selling' ? sellingOrders : purchaseOrders;
+  const currentList = activeTab === 'selling' ? sellingOrders : activeTab === 'purchase' ? purchaseOrders : [];
   const allSelected = currentList.length > 0 && currentList.every((o) => selectedIds.has(o._id));
 
   const toggleOne = (id) => {
@@ -92,6 +108,14 @@ export default function MyOrders() {
       const buyData = buyRes.ok ? await buyRes.json() : [];
       setSellingOrders(Array.isArray(sellData) ? sellData : []);
       setPurchaseOrders(Array.isArray(buyData) ? buyData : []);
+
+      const ratings = await getMyRatings().catch(() => []);
+      const byOrder = {};
+      ratings.forEach((r) => { byOrder[r.orderId] = r; });
+      setMyRatingsByOrder(byOrder);
+
+      const warrantyList = await getMyWarranties().catch(() => []);
+      setWarranties(Array.isArray(warrantyList) ? warrantyList : []);
     } catch (err) {
       console.error('Error fetching orders:', err);
       setError(err.message);
@@ -226,6 +250,14 @@ export default function MyOrders() {
             >
               Purchase History ({purchaseOrders.length})
             </button>
+            <button
+              onClick={() => switchTab('warranties')}
+              className={`px-4 py-2 rounded-lg font-semibold transition ${
+                activeTab === 'warranties' ? 'bg-yellow-400 text-black' : 'bg-white/10 text-white hover:bg-white/20'
+              }`}
+            >
+              My Warranties ({warranties.length})
+            </button>
           </div>
         </div>
       </div>
@@ -323,7 +355,8 @@ export default function MyOrders() {
               })}
             </div>
           )
-        ) : purchaseOrders.length === 0 ? (
+        ) : activeTab === 'purchase' ? (
+          purchaseOrders.length === 0 ? (
           <EmptyState icon={Package} text="You haven't made any deals yet." />
         ) : (
           <div className="space-y-3">
@@ -386,7 +419,83 @@ export default function MyOrders() {
                     <ActionBtn label="Cancel Deal" icon={X} color="neutral" busy={updatingId === order._id} onClick={() => cancelAsBuyer(order._id)} />
                   </div>
                 )}
+                {order.status === 'COMPLETED' && (
+                  <div className="flex mt-3 pt-3 border-t border-white/10">
+                    <ActionBtn
+                      label={myRatingsByOrder[order._id] ? 'Edit Rating' : 'Rate Seller'}
+                      icon={Star}
+                      color="yellow"
+                      busy={false}
+                      onClick={() => setRateModalOrder(order)}
+                    />
+                  </div>
+                )}
               </div>
+              );
+            })}
+          </div>
+          )
+        ) : warranties.length === 0 ? (
+          <EmptyState icon={ShieldCheck} text="No warrantied purchases yet — completed orders for products with a warranty will show up here." />
+        ) : (
+          <div className="space-y-3">
+            {warranties.map((w) => {
+              const purchaseOrder = purchaseOrders.find((o) => o._id === w.orderId);
+              return (
+                <div key={w.orderId} className="bg-white/5 border border-white/10 rounded-xl p-4 backdrop-blur-md">
+                  <div className="flex items-start gap-3">
+                    {w.productImageUrl ? (
+                      <img
+                        src={w.productImageUrl}
+                        alt={w.productTitle}
+                        className="w-14 h-14 rounded-lg object-cover flex-shrink-0"
+                        onError={(e) => { e.target.src = 'https://via.placeholder.com/64x64?text=%20'; }}
+                      />
+                    ) : (
+                      <div className="w-14 h-14 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
+                        <ShieldCheck size={20} className="text-yellow-400" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-bold text-white truncate">{w.productTitle}</h3>
+                        <span className={`px-2 py-0.5 border text-[11px] font-bold rounded-full ${WARRANTY_STATUS_STYLES[w.status] || WARRANTY_STATUS_STYLES.Unknown}`}>
+                          {w.status}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-white/60">
+                        <span>Sold by {w.sellerName}</span>
+                        <span className="flex items-center gap-1"><Calendar size={13} /> Purchased {new Date(w.purchaseDate).toLocaleDateString()}</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-white/50">
+                        <span>Warranty: {w.warrantyDuration}</span>
+                        <span>
+                          {w.isLifetime
+                            ? 'No expiry (lifetime warranty)'
+                            : w.expiryDate
+                            ? `Expires ${new Date(w.expiryDate).toLocaleDateString()}`
+                            : 'Expiry unknown — could not read the warranty duration'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-4 mt-3 pt-3 border-t border-white/10 text-sm">
+                    {purchaseOrder && (
+                      <button
+                        onClick={() => setDetailOrder(purchaseOrder)}
+                        className="text-yellow-400 hover:underline font-medium"
+                      >
+                        View Order
+                      </button>
+                    )}
+                    <button
+                      onClick={() => navigate(`/dealing?productId=${w.productId}`)}
+                      className="text-yellow-400 hover:underline font-medium"
+                    >
+                      View Product
+                    </button>
+                  </div>
+                </div>
               );
             })}
           </div>
@@ -408,6 +517,18 @@ export default function MyOrders() {
           deleting={deleting}
           onCancel={() => setConfirmingDelete(false)}
           onConfirm={confirmDeleteSelected}
+        />
+      )}
+
+      {rateModalOrder && (
+        <RateSellerModal
+          order={rateModalOrder}
+          existingRating={myRatingsByOrder[rateModalOrder._id]}
+          onClose={() => setRateModalOrder(null)}
+          onSaved={(rating) => {
+            setMyRatingsByOrder((prev) => ({ ...prev, [rateModalOrder._id]: rating }));
+            setRateModalOrder(null);
+          }}
         />
       )}
     </div>

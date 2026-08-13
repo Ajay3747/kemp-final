@@ -4,6 +4,7 @@ const Product = require('../models/Product');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { isValidTransition, isTerminalStatus, BUYER_NOTIFICATION_MESSAGES, ALLOWED_TRANSITIONS } = require('../services/orderStatus');
+const { computeWarrantyInfo } = require('../utils/warrantyMath');
 
 const isValidObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
 
@@ -277,6 +278,11 @@ exports.updateOrderStatus = async (req, res) => {
       // buyer on this order — sticky even if the order is later cancelled.
       order.acceptedAt = new Date();
     }
+    if (status === 'COMPLETED') {
+      // Warranty start date for "My Warranties" — COMPLETED is terminal, so
+      // this is set exactly once.
+      order.completedAt = new Date();
+    }
     await order.save();
 
     // COMPLETED -> permanently SOLD, stays hidden from the store.
@@ -398,6 +404,62 @@ exports.deleteHistoryRecords = async (req, res) => {
     res.json({ message: 'History records removed.', deletedIds });
   } catch (error) {
     console.error('Delete history records error:', error);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// GET /api/orders/warranties/mine — every completed purchase of the logged-in
+// buyer that has a warranty, with expiry/status computed on read from the
+// existing Order (purchase date) + Product (warrantyAvailable/warrantyDuration)
+// data. Nothing new is stored on Order or Product for this — it's all derived.
+exports.getMyWarranties = async (req, res) => {
+  try {
+    const buyerId = req.user.userId;
+    const orders = await Order.find({ buyerId, status: 'COMPLETED' })
+      .sort({ completedAt: -1, updatedAt: -1 })
+      .lean();
+
+    if (orders.length === 0) {
+      return res.json([]);
+    }
+
+    const productIds = orders.map((o) => o.productId).filter(Boolean);
+    const products = await Product.find({ _id: { $in: productIds }, warrantyAvailable: true })
+      .select('warrantyDuration')
+      .lean();
+    const productById = {};
+    products.forEach((p) => { productById[p._id.toString()] = p; });
+
+    const warranties = orders
+      .map((order) => {
+        const product = order.productId ? productById[order.productId.toString()] : null;
+        if (!product) return null; // this product has no warranty — skip
+
+        // completedAt didn't exist on orders created before this feature —
+        // updatedAt is a safe fallback since COMPLETED is terminal (nothing
+        // mutates the order again after this point).
+        const purchaseDate = order.completedAt || order.updatedAt;
+        const info = computeWarrantyInfo(new Date(purchaseDate), product.warrantyDuration);
+
+        return {
+          orderId: order._id.toString(),
+          productId: order.productId.toString(),
+          productTitle: order.productTitle,
+          productImageUrl: order.productImageUrl,
+          sellerId: order.sellerId,
+          sellerName: order.sellerName,
+          purchaseDate,
+          warrantyDuration: product.warrantyDuration,
+          expiryDate: info.expiryDate,
+          isLifetime: info.isLifetime,
+          status: info.status
+        };
+      })
+      .filter(Boolean);
+
+    res.json(warranties);
+  } catch (error) {
+    console.error('Get my warranties error:', error);
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };

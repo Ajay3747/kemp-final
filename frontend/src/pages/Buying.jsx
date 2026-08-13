@@ -4,6 +4,9 @@ import { Search, X, ShoppingBag, Store, PackageSearch, Star } from "lucide-react
 import ProductDetailModal from "../components/ProductDetailModal";
 import CategoryDropdown from "../components/CategoryDropdown";
 import WarrantyBadge from "../components/WarrantyBadge";
+import StarRating from "../components/StarRating";
+import SellerReviewsModal from "../components/SellerReviewsModal";
+import { getSellersRatingSummary } from "../utils/ratingApi";
 
 const API_URL = "http://localhost:5000/api/products";
 
@@ -21,6 +24,8 @@ export default function Buying() {
   const [activeStore, setActiveStore] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [ratingSummary, setRatingSummary] = useState({});
+  const [reviewsStore, setReviewsStore] = useState(null);
 
   const categories = ["All", "Books", "Gadgets", "Notes", "Electronics", "Apparel", "Sports", "Furniture", "Dorm Essentials", "Other"];
 
@@ -65,6 +70,18 @@ export default function Buying() {
     window.addEventListener('product-removed', handleProductRemoved);
     return () => window.removeEventListener('product-removed', handleProductRemoved);
   }, [activeProduct]);
+
+  // One batched call for every store's average rating, instead of one per card.
+  useEffect(() => {
+    const sellerIds = products.map((product) =>
+      product.sellerId && typeof product.sellerId === "object" ? product.sellerId._id : product.sellerId
+    );
+    if (sellerIds.filter(Boolean).length === 0) return;
+
+    getSellersRatingSummary(sellerIds)
+      .then(setRatingSummary)
+      .catch((err) => console.error("Error fetching seller ratings:", err));
+  }, [products]);
 
   const fetchProducts = async () => {
     try {
@@ -294,6 +311,13 @@ export default function Buying() {
                   </div>
                   <div className="p-5">
                     <h3 className="text-white font-bold text-lg leading-snug group-hover:text-yellow-300 transition-colors">{store.sellerName}'s Store</h3>
+                    <div className="mt-1.5">
+                      <StarRating
+                        value={(ratingSummary[store.sellerId] || {}).averageRating || 0}
+                        count={(ratingSummary[store.sellerId] || {}).totalRatings || 0}
+                        size={15}
+                      />
+                    </div>
                     {Array.isArray(store.products) && store.products.length > 0 && (() => {
                       const prices = store.products.map(p => Number(p.price)).filter(v => Number.isFinite(v));
                       if (prices.length === 0) return null;
@@ -333,7 +357,20 @@ export default function Buying() {
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-2xl font-bold text-yellow-400">{activeStore.sellerName}'s Store</h2>
-                <p className="text-gray-400 text-sm">{activeStore.products.length} product{activeStore.products.length === 1 ? "" : "s"}</p>
+                <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                  <StarRating
+                    value={(ratingSummary[activeStore.sellerId] || {}).averageRating || 0}
+                    count={(ratingSummary[activeStore.sellerId] || {}).totalRatings || 0}
+                    size={15}
+                  />
+                  <button
+                    onClick={() => setReviewsStore(activeStore)}
+                    className="text-yellow-400 text-xs font-semibold hover:underline"
+                  >
+                    View Reviews
+                  </button>
+                </div>
+                <p className="text-gray-400 text-sm mt-1">{activeStore.products.length} product{activeStore.products.length === 1 ? "" : "s"}</p>
               </div>
               <button
                 onClick={() => setActiveStore(null)}
@@ -382,6 +419,14 @@ export default function Buying() {
             </div>
           </div>
         </div>
+      )}
+
+      {reviewsStore && (
+        <SellerReviewsModal
+          sellerId={reviewsStore.sellerId}
+          sellerName={reviewsStore.sellerName}
+          onClose={() => setReviewsStore(null)}
+        />
       )}
     </div>
   );
