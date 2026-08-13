@@ -1,0 +1,21 @@
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Circle -->
+  <circle cx="100" cy="100" r="95" fill="#1a1a2e" stroke="#facc15" stroke-width="3"/>
+  
+  <!-- Shopping Cart Body -->
+  <path d="M 60 70 L 70 120 Q 70 125 75 125 L 130 125 Q 135 125 135 120 L 145 70 Z" fill="none" stroke="#facc15" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Cart Handle -->
+  <path d="M 70 70 Q 100 50 130 70" fill="none" stroke="#facc15" stroke-width="3" stroke-linecap="round"/>
+  
+  <!-- Wheels -->
+  <circle cx="80" cy="130" r="6" fill="none" stroke="#facc15" stroke-width="2.5"/>
+  <circle cx="125" cy="130" r="6" fill="none" stroke="#facc15" stroke-width="2.5"/>
+  
+  <!-- Accent lines for campus theme -->
+  <line x1="50" y1="50" x2="60" y2="60" stroke="#fbbf24" stroke-width="2" stroke-linecap="round"/>
+  <line x1="150" y1="50" x2="140" y2="60" stroke="#fbbf24" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- Text Arc (optional subtle design) -->
+  <circle cx="100" cy="100" r="85" fill="none" stroke="#facc15" stroke-width="1" opacity="0.3"/>
+</svg>

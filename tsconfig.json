@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowJs": true,
+    "checkJs": false,
+    "jsx": "react-jsx",
+    "noEmit": true
+  },
+  "include": [
+    "backend/src/**/*.js",
+    "backend/src/**/*.ts",
+    "frontend/src/**/*.js",
+    "frontend/src/**/*.jsx",
+    "frontend/src/**/*.ts",
+    "frontend/src/**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

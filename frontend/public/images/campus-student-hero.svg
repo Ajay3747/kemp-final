@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 450" width="400" height="450">
+  <defs>
+    <!-- Gradients for depth -->
+    <linearGradient id="skinGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f4c892"/>
+      <stop offset="100%" stop-color="#daa972"/>
+    </linearGradient>
+    <linearGradient id="shirtGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#26a69a"/>
+      <stop offset="50%" stop-color="#00897b"/>
+      <stop offset="100%" stop-color="#00695c"/>
+    </linearGradient>
+    <linearGradient id="pantsGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3949ab"/>
+      <stop offset="100%" stop-color="#283593"/>
+    </linearGradient>
+    <linearGradient id="backpackGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8d6e63"/>
+      <stop offset="100%" stop-color="#5d4037"/>
+    </linearGradient>
+    <linearGradient id="boxGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffd54f"/>
+      <stop offset="50%" stop-color="#ffb300"/>
+      <stop offset="100%" stop-color="#ff8f00"/>
+    </linearGradient>
+    <radialGradient id="faceGrad" cx="50%" cy="30%">
+      <stop offset="0%" stop-color="#f9d5a7"/>
+      <stop offset="100%" stop-color="#f4c892"/>
+    </radialGradient>
+  </defs>
+  
+  <!-- Shadow -->
+  <ellipse cx="200" cy="430" rx="120" ry="15" fill="#000" opacity="0.15"/>
+  
+  <!-- Boy Character -->
+  <g id="student">
+    <!-- Backpack (behind body) -->
+    <g id="backpack">
+      <rect x="135" y="145" width="65" height="85" rx="12" fill="url(#backpackGrad)"/>
+      <circle cx="155" cy="165" r="8" fill="#6d4c41"/>
+      <circle cx="180" cy="165" r="8" fill="#6d4c41"/>
+      <!-- Straps -->
+      <rect x="145" y="145" width="8" height="90" rx="4" fill="#4e342e" opacity="0.8"/>
+      <rect x="182" y="145" width="8" height="90" rx="4" fill="#4e342e" opacity="0.8"/>
+    </g>
+    
+    <!-- Head -->
+    <circle cx="167.5" cy="90" r="42" fill="url(#faceGrad)"/>
+    
+    <!-- Hair -->
+    <path d="M135,75 Q125,55 140,50 Q155,45 167.5,48 Q180,45 195,50 Q210,55 200,75 Q200,95 195,100 L140,100 Q135,95 135,75 Z" fill="#5d4037"/>
+    
+    <!-- Eyes -->
+    <ellipse cx="152" cy="88" rx="3.5" ry="4" fill="#2c1810"/>
+    <ellipse cx="183" cy="88" rx="3.5" ry="4" fill="#2c1810"/>
+    
+    <!-- Smile -->
+    <path d="M155,105 Q167.5,113 180,105" stroke="#d4956c" stroke-width="3" stroke-linecap="round" fill="none"/>
+    
+    <!-- Body/Shirt -->
+    <path d="M135,130 L135,240 Q135,260 155,260 L180,260 Q200,260 200,240 L200,130 Q200,125 195,120 L185,120 L185,145 L150,145 L150,120 L140,120 Q135,125 135,130 Z" fill="url(#shirtGrad)"/>
+    
+    <!-- Shirt collar -->
+    <rect x="155" y="118" width="25" height="12" rx="2" fill="#1f8a7d"/>
+    
+    <!-- Left Arm -->
+    <g id="leftArm">
+      <ellipse cx="120" cy="170" rx="16" ry="45" fill="url(#shirtGrad)" transform="rotate(-10 120 170)"/>
+      <circle cx="117" cy="212" r="14" fill="url(#skinGrad)"/>
+    </g>
+    
+    <!-- Right Arm (holding/near trolley) -->
+    <g id="rightArm">
+      <ellipse cx="215" cy="175" rx="16" ry="45" fill="url(#shirtGrad)" transform="rotate(25 215 175)"/>
+      <circle cx="225" cy="217" r="14" fill="url(#skinGrad)"/>
+    </g>
+    
+    <!-- Pants/Legs -->
+    <g id="legs">
+      <!-- Left leg -->
+      <rect x="147" y="258" width="22" height="120" rx="11" fill="url(#pantsGrad)"/>
+      <!-- Right leg -->
+      <rect x="166" y="258" width="22" height="120" rx="11" fill="url(#pantsGrad)"/>
+    </g>
+    
+    <!-- Shoes -->
+    <g id="shoes">
+      <ellipse cx="158" cy="382" rx="20" ry="10" fill="#212121"/>
+      <rect x="138" y="372" width="40" height="12" rx="6" fill="#37474f"/>
+      
+      <ellipse cx="177" cy="382" rx="20" ry="10" fill="#212121"/>
+      <rect x="157" y="372" width="40" height="12" rx="6" fill="#37474f"/>
+    </g>
+  </g>
+  
+  <!-- Yellow Trolley/Box -->
+  <g id="trolley" transform="translate(255, 260)">
+    <!-- Main box body -->
+    <rect x="0" y="0" width="70" height="55" rx="8" fill="url(#boxGrad)" stroke="#f57c00" stroke-width="2"/>
+    
+    <!-- Box highlights -->
+    <rect x="5" y="5" width="60" height="45" rx="6" fill="#ffe082" opacity="0.3"/>
+    
+    <!-- Box details/lines -->
+    <line x1="35" y1="0" x2="35" y2="55" stroke="#ff8f00" stroke-width="2"/>
+    <line x1="0" y1="27.5" x2="70" y2="27.5" stroke="#ff8f00" stroke-width="2"/>
+    
+    <!-- Shine effect -->
+    <circle cx="20" cy="18" r="8" fill="#fff" opacity="0.4"/>
+  </g>
+</svg>
