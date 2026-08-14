@@ -1,16 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, ShoppingBag, Mail, User, Package, Flag, MessageCircle } from 'lucide-react';
+import { X, ShoppingBag, Mail, User, Package, Flag, MessageCircle, Sparkles } from 'lucide-react';
 import WarrantyBadge from './WarrantyBadge';
 import ReportUserModal from './ReportUserModal';
 
 const API_BASE = 'http://localhost:5000/api';
 
-export default function ProductDetailModal({ product, onClose }) {
+export default function ProductDetailModal({ product, onClose, onSelectProduct }) {
   const navigate = useNavigate();
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [startingChat, setStartingChat] = useState(false);
+  const [similarProducts, setSimilarProducts] = useState([]);
+
+  useEffect(() => {
+    setShowFullDescription(false);
+    if (!product?._id) return;
+
+    let cancelled = false;
+    fetch(`${API_BASE}/products/${product._id}/similar`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (!cancelled) setSimilarProducts(Array.isArray(data) ? data : []);
+      })
+      .catch((err) => console.error('Error fetching similar products:', err));
+
+    return () => { cancelled = true; };
+  }, [product?._id]);
 
   const sellerId = typeof product.sellerId === 'object' ? product.sellerId?._id : product.sellerId;
   const currentUserId = localStorage.getItem('userId');
@@ -142,7 +158,14 @@ export default function ProductDetailModal({ product, onClose }) {
             </div>
 
             <div className="flex flex-col">
-              <h1 className="text-3xl sm:text-4xl font-bold text-yellow-400 mb-5">{product.title || product.name}</h1>
+              <h1 className="text-3xl sm:text-4xl font-bold text-yellow-400 mb-5 flex items-center gap-3 flex-wrap">
+                {product.title || product.name}
+                {product.isBundle && (
+                  <span className="flex items-center gap-1.5 bg-yellow-400/10 text-yellow-300 text-sm font-bold px-3 py-1 rounded-full">
+                    <Package size={14} /> Bundle of {product.bundleItems?.length || 0}
+                  </span>
+                )}
+              </h1>
 
               <div className="flex-1 space-y-5">
                 <div>
@@ -159,14 +182,38 @@ export default function ProductDetailModal({ product, onClose }) {
                         </span>
                       )}
                     </p>
-                    <div className="flex items-center text-gray-400">
-                      <Package size={18} className="mr-2 text-yellow-400" />
-                      <span>
-                        Stock: <span className="text-white font-semibold">{product.stockAvailable || 'Not Specified'}</span>
-                      </span>
-                    </div>
+                    {!product.isBundle && (
+                      <div className="flex items-center text-gray-400">
+                        <Package size={18} className="mr-2 text-yellow-400" />
+                        <span>
+                          Stock: <span className="text-white font-semibold">{product.stockAvailable || 'Not Specified'}</span>
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
+
+                {product.isBundle && Array.isArray(product.bundleItems) && product.bundleItems.length > 0 && (
+                  <div>
+                    <h2 className="text-lg font-bold text-white mb-2.5">What's Included</h2>
+                    <div className="space-y-2.5">
+                      {product.bundleItems.map((item, idx) => (
+                        <div key={item._id || idx} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl p-3">
+                          <img
+                            src={item.imageUrl || 'https://via.placeholder.com/64x64?text=No+Image'}
+                            alt={item.title}
+                            className="w-14 h-14 rounded-lg object-cover flex-shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white font-semibold text-sm truncate">{item.title}</p>
+                            {item.description && <p className="text-gray-400 text-xs truncate">{item.description}</p>}
+                          </div>
+                          <span className="text-yellow-400 font-bold text-sm flex-shrink-0">₹{Number(item.price).toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <WarrantyBadge available={product.warrantyAvailable} duration={product.warrantyDuration} variant="detail" />
 
@@ -197,6 +244,37 @@ export default function ProductDetailModal({ product, onClose }) {
                   </div>
                 </div>
               </div>
+
+              {similarProducts.length > 0 && (
+                <div className="mt-6">
+                  <h2 className="text-lg font-bold text-white mb-2.5 flex items-center gap-2">
+                    <Sparkles size={18} className="text-yellow-400" /> You Might Also Like
+                  </h2>
+                  <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-custom">
+                    {similarProducts.map((item) => (
+                      <button
+                        key={item._id}
+                        type="button"
+                        onClick={() => onSelectProduct && onSelectProduct(item)}
+                        className="flex-shrink-0 w-32 text-left bg-white/5 border border-white/10 rounded-xl overflow-hidden hover:border-yellow-400/40 transition-colors"
+                      >
+                        <div className="h-20 w-full overflow-hidden">
+                          <img
+                            src={item.imageUrl || 'https://via.placeholder.com/200x150?text=No+Image'}
+                            alt={item.title}
+                            className="w-full h-full object-cover"
+                            onError={(e) => { e.target.src = 'https://via.placeholder.com/200x150?text=No+Image'; }}
+                          />
+                        </div>
+                        <div className="p-2">
+                          <p className="text-white text-xs font-semibold truncate">{item.title}</p>
+                          <p className="text-yellow-400 text-xs font-bold">₹{Number(item.price).toLocaleString()}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="flex flex-col sm:flex-row gap-3 mt-6">
                 {!isOwnListing && (

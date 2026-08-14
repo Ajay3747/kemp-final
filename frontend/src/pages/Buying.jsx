@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Search, X, ShoppingBag, Store, PackageSearch, Star } from "lucide-react";
+import { Search, X, ShoppingBag, Store, PackageSearch, Star, Package } from "lucide-react";
 import ProductDetailModal from "../components/ProductDetailModal";
 import CategoryDropdown from "../components/CategoryDropdown";
 import WarrantyBadge from "../components/WarrantyBadge";
@@ -251,6 +251,11 @@ export default function Buying() {
                         }}
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                      {product.isBundle && (
+                        <div className="absolute top-3 left-3 flex items-center gap-1 bg-black/60 backdrop-blur-sm text-yellow-400 py-1 px-2.5 rounded-full font-bold text-xs shadow-lg">
+                          <Package size={12} /> Bundle ({product.bundleItems?.length || 0})
+                        </div>
+                      )}
                       {product.price !== undefined && product.price !== null && Number.isFinite(Number(product.price)) && (
                         <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-sm text-yellow-400 py-1 px-3 rounded-full font-bold text-sm shadow-lg">
                           ₹{Number(product.price).toLocaleString()}
@@ -348,6 +353,7 @@ export default function Buying() {
         <ProductDetailModal
           product={activeProduct}
           onClose={() => setActiveProduct(null)}
+          onSelectProduct={setActiveProduct}
         />
       )}
 
@@ -404,6 +410,11 @@ export default function Buying() {
                   <div className="p-4">
                     <h3 className="text-white font-bold text-base group-hover:text-yellow-300 transition-colors">{product.title}</h3>
                     <p className="text-gray-400 text-xs mb-2">{product.category}</p>
+                    {product.isBundle && (
+                      <div className="inline-flex items-center gap-1 bg-yellow-400/10 text-yellow-300 py-0.5 px-2 rounded-full font-semibold text-xs mb-1.5">
+                        <Package size={11} /> Bundle ({product.bundleItems?.length || 0})
+                      </div>
+                    )}
                     {product.price !== undefined && product.price !== null && Number.isFinite(Number(product.price)) && (
                       <div className="text-yellow-400 font-semibold">₹{Number(product.price).toLocaleString()}</div>
                     )}

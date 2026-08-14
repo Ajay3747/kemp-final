@@ -1,8 +1,8 @@
 import React from 'react';
-import { ShoppingBag, Star, Mail } from 'lucide-react';
+import { ShoppingBag, Star, Mail, Package } from 'lucide-react';
 import WarrantyBadge from './WarrantyBadge';
 
-export default function ItemCard({ name, price, description, imageUrl, sellerEmail, hidePrice, warrantyAvailable, warrantyDuration }) {
+export default function ItemCard({ name, price, description, imageUrl, sellerEmail, hidePrice, warrantyAvailable, warrantyDuration, isBundle, bundleItemCount }) {
   return (
     <div className="premium-card group overflow-hidden cursor-pointer">
       <div className="relative h-64 overflow-hidden">
@@ -12,6 +12,11 @@ export default function ItemCard({ name, price, description, imageUrl, sellerEma
           className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-110"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+        {isBundle && (
+          <div className="absolute top-4 left-4 flex items-center gap-1 bg-black/60 backdrop-blur-sm text-yellow-400 py-1 px-3 rounded-full font-bold text-xs shadow-lg">
+            <Package size={12} /> Bundle{bundleItemCount ? ` (${bundleItemCount})` : ''}
+          </div>
+        )}
         {!hidePrice && price && price !== '₹0' && price !== '₹undefined' && price !== '₹null' && (
           <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-sm text-yellow-400 py-1 px-3 rounded-full font-bold shadow-lg">
             {price}

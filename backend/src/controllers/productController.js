@@ -44,12 +44,30 @@ function parseWarrantyInput({ warrantyAvailable, warrantyDuration }) {
   return { provided: true, warrantyAvailable: true, warrantyDuration: duration };
 }
 
-// Create a new product listing
+// Moderates one uploaded file and returns either { ok: true } or
+// { ok: false, status, body } ready to send straight back to the client.
+// Shared by the single-image and bundle-item-image paths in createProduct
+// so both go through the same backend-is-final-authority check.
+async function moderateOrReject(file) {
+  const moderation = await moderateListingImage(file);
+  if (!moderation.allowed) {
+    return {
+      ok: false,
+      status: MODERATION_HTTP_STATUS[moderation.code] || 422,
+      body: { message: moderation.reason || 'This image is not allowed for marketplace listings.', moderation }
+    };
+  }
+  return { ok: true };
+}
+
+// Create a new product listing (a single item, or a bundle/lot of items
+// sold together as one unit — see bundleItems on the Product model).
 exports.createProduct = async (req, res) => {
   try {
-    const { title, description, price, category, condition, sellerId } = req.body;
+    const { title, description, category, condition, sellerId } = req.body;
+    const isBundle = req.body.isBundle === 'true' || req.body.isBundle === true;
 
-    if (!title || !description || !price || !category || !sellerId) {
+    if (!title || !description || !category || !sellerId || (!isBundle && !req.body.price)) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
@@ -67,26 +85,59 @@ exports.createProduct = async (req, res) => {
       return res.status(404).json({ message: 'Seller not found' });
     }
 
-    // Image moderation is the backend's final authority — this re-checks the
-    // actual submitted file server-side regardless of any frontend precheck,
-    // so a listing cannot be created with a disallowed image by calling this
-    // API directly. Listings without an image skip straight through.
-    if (req.file) {
-      const moderation = await moderateListingImage(req.file);
-      if (!moderation.allowed) {
-        const status = MODERATION_HTTP_STATUS[moderation.code] || 422;
-        return res.status(status).json({
-          message: moderation.reason || 'This image is not allowed for marketplace listings.',
-          moderation
-        });
+    const coverImageFile = req.files?.image?.[0] || null;
+    const bundleImageFiles = req.files?.bundleImages || [];
+
+    let bundlePayload = null;
+    let totalPrice;
+
+    if (isBundle) {
+      let bundleItemsInput;
+      try {
+        bundleItemsInput = JSON.parse(req.body.bundleItems || '[]');
+      } catch (e) {
+        return res.status(400).json({ message: 'Invalid bundle items payload.' });
       }
+
+      if (!Array.isArray(bundleItemsInput) || bundleItemsInput.length < 2) {
+        return res.status(400).json({ message: 'A bundle needs at least 2 items.' });
+      }
+      if (bundleItemsInput.some((item) => !item.title || !item.price || Number(item.price) <= 0)) {
+        return res.status(400).json({ message: 'Each bundle item needs a title and a price greater than 0.' });
+      }
+      if (bundleImageFiles.length !== bundleItemsInput.length) {
+        return res.status(400).json({ message: 'Each bundle item needs exactly one photo.' });
+      }
+
+      // Moderate every sub-item photo before creating anything — a listing
+      // with a rejected bundle item image should never be partially saved.
+      for (const file of bundleImageFiles) {
+        const result = await moderateOrReject(file);
+        if (!result.ok) return res.status(result.status).json(result.body);
+      }
+
+      bundlePayload = bundleItemsInput.map((item, i) => ({
+        title: item.title,
+        description: item.description || '',
+        price: parseFloat(item.price),
+        imageUrl: `data:${bundleImageFiles[i].mimetype};base64,${bundleImageFiles[i].buffer.toString('base64')}`,
+        imageMimeType: bundleImageFiles[i].mimetype
+      }));
+      totalPrice = bundlePayload.reduce((sum, item) => sum + item.price, 0);
+    } else if (coverImageFile) {
+      // Image moderation is the backend's final authority — this re-checks
+      // the actual submitted file server-side regardless of any frontend
+      // precheck, so a listing cannot be created with a disallowed image by
+      // calling this API directly. Listings without an image skip straight through.
+      const result = await moderateOrReject(coverImageFile);
+      if (!result.ok) return res.status(result.status).json(result.body);
     }
 
     // Create product
     const product = new Product({
       title,
       description,
-      price: parseFloat(price),
+      price: isBundle ? totalPrice : parseFloat(req.body.price),
       category,
       condition: condition || 'used',
       sellerId,
@@ -95,9 +146,15 @@ exports.createProduct = async (req, res) => {
       sellerPhone: seller.phone,
       warrantyAvailable,
       warrantyDuration,
-      imageUrl: req.file ? `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}` : null,
-      imageData: req.file ? req.file.buffer : null,
-      imageMimeType: req.file ? req.file.mimetype : null
+      isBundle,
+      bundleItems: bundlePayload || [],
+      imageUrl: isBundle
+        ? bundlePayload[0].imageUrl
+        : (coverImageFile ? `data:${coverImageFile.mimetype};base64,${coverImageFile.buffer.toString('base64')}` : null),
+      imageData: !isBundle && coverImageFile ? coverImageFile.buffer : null,
+      imageMimeType: isBundle
+        ? bundlePayload[0].imageMimeType
+        : (coverImageFile ? coverImageFile.mimetype : null)
     });
 
     await product.save();
@@ -209,6 +266,63 @@ exports.getProductsBySeller = async (req, res) => {
   }
 };
 
+// Get a seller's auto-expired listings (eligible for one-click relist).
+// Deliberately separate from getProductsBySeller so existing callers of
+// that endpoint (e.g. the Community "link to your listing" picker) keep
+// only seeing live, biddable listings.
+exports.getExpiredListings = async (req, res) => {
+  try {
+    const { sellerId } = req.params;
+
+    const products = await Product.find({ sellerId, isActive: false, autoExpired: true })
+      .select('-sellerPhone')
+      .sort({ updatedAt: -1 });
+
+    res.json(products);
+  } catch (error) {
+    console.error('Get expired listings error:', error);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// Relist a listing that was auto-expired after 30 days of inactivity.
+// Manually deleted listings (isActive:false, autoExpired:false) are not
+// eligible — that delete is intentionally permanent, same as before.
+exports.relistProduct = async (req, res) => {
+  try {
+    const { productId } = req.params;
+
+    const product = await Product.findById(productId);
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    if (product.sellerId.toString() !== req.user.userId.toString()) {
+      return res.status(403).json({ message: 'Unauthorized: Only the seller can relist this listing.' });
+    }
+
+    if (!product.autoExpired) {
+      return res.status(400).json({ message: 'Only auto-expired listings can be relisted.' });
+    }
+
+    product.isActive = true;
+    product.autoExpired = false;
+    product.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    product.updatedAt = new Date();
+    await product.save();
+
+    await UserProfile.findOneAndUpdate(
+      { userId: product.sellerId },
+      { $inc: { productsListed: 1 }, updatedAt: new Date() }
+    );
+
+    res.json({ message: 'Listing relisted successfully', product });
+  } catch (error) {
+    console.error('Relist product error:', error);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
 // Get single product
 exports.getProduct = async (req, res) => {
   try {
@@ -225,6 +339,51 @@ exports.getProduct = async (req, res) => {
     res.json(product);
   } catch (error) {
     console.error('Get product error:', error);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// Get listings similar to a given product (same category, comparable price)
+exports.getSimilarProducts = async (req, res) => {
+  try {
+    const { productId } = req.params;
+
+    const source = await Product.findById(productId).select('category price sellerId');
+    if (!source) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    const baseFilter = {
+      _id: { $ne: source._id },
+      sellerId: { $ne: source.sellerId },
+      category: source.category,
+      isActive: true,
+      status: { $nin: ['RESERVED', 'SOLD'] }
+    };
+
+    // Candidates sorted newest-first, then re-ranked below by price closeness
+    // to the source listing. A plain find() (no aggregation) keeps this in
+    // line with the rest of this controller.
+    const candidates = await Product.find(baseFilter)
+      .select('-sellerPhone')
+      .populate('sellerId', 'username collegeEmail')
+      .sort({ createdAt: -1 })
+      .limit(20);
+
+    const byPriceCloseness = (list) =>
+      [...list].sort((a, b) => Math.abs(a.price - source.price) - Math.abs(b.price - source.price));
+
+    const inPriceRange = candidates.filter(
+      (p) => p.price >= source.price * 0.5 && p.price <= source.price * 1.5
+    );
+
+    // Niche categories may not have enough price-comparable listings — fall
+    // back to the plain category match rather than showing an empty strip.
+    const ranked = inPriceRange.length >= 4 ? inPriceRange : candidates;
+
+    res.json(byPriceCloseness(ranked).slice(0, 6));
+  } catch (error) {
+    console.error('Get similar products error:', error);
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };

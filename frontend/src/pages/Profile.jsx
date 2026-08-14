@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import UserProfile from '../components/UserProfile';
 import ItemCard from '../components/ItemCard';
 import SaleRecordModal from '../components/SaleRecordModal';
-import { ShoppingBag, Star, LayoutDashboard, LogOut, Edit2, TrendingUp, Bell, BellOff, ClipboardList, User, Mail, Phone, Calendar, Hash, Building2, Award, X, ShieldCheck, ShieldOff, Droplet, MessageCircle } from 'lucide-react';
+import { ShoppingBag, Star, LayoutDashboard, LogOut, Edit2, TrendingUp, Bell, BellOff, ClipboardList, User, Mail, Phone, Calendar, Hash, Building2, Award, X, ShieldCheck, ShieldOff, Droplet, MessageCircle, RotateCcw, Clock } from 'lucide-react';
 import { getPushSubscriptionStatus, enablePushNotifications, disablePushNotifications } from '../utils/pushApi';
 
 const API_URL = "http://localhost:5000/api";
@@ -13,6 +13,8 @@ export default function Profile() {
   const [userData, setUserData] = useState(null);
   const [profileData, setProfileData] = useState(null);
   const [userListings, setUserListings] = useState([]);
+  const [expiredListings, setExpiredListings] = useState([]);
+  const [relistingId, setRelistingId] = useState(null);
   const [userPurchases, setUserPurchases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -133,6 +135,23 @@ export default function Profile() {
           }
         } catch (listingsErr) {
           console.error('Error fetching listings:', listingsErr);
+        }
+
+        // Fetch listings that auto-expired after 30 days (eligible for relist)
+        try {
+          const expiredResponse = await fetch(`${API_URL}/products/seller/${userId}/expired`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          if (expiredResponse.ok) {
+            const expired = await expiredResponse.json();
+            setExpiredListings(Array.isArray(expired) ? expired : []);
+          }
+        } catch (expiredErr) {
+          console.error('Error fetching expired listings:', expiredErr);
         }
 
         // Fetch unread notifications count
@@ -272,6 +291,34 @@ export default function Profile() {
       alert('Product deleted successfully!');
     } catch (err) {
       alert('Failed to delete product: ' + err.message);
+    }
+  };
+
+  const handleRelistProduct = async (productId) => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert('You must be logged in to relist a product.');
+      return;
+    }
+    setRelistingId(productId);
+    try {
+      const response = await fetch(`${API_URL}/products/${productId}/relist`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to relist product');
+      }
+      setExpiredListings((prev) => prev.filter((p) => p._id !== productId));
+      setUserListings((prev) => [data.product, ...prev]);
+    } catch (err) {
+      alert('Failed to relist product: ' + err.message);
+    } finally {
+      setRelistingId(null);
     }
   };
 
@@ -683,6 +730,8 @@ export default function Profile() {
                       sellerEmail={product.sellerEmail}
                       warrantyAvailable={product.warrantyAvailable}
                       warrantyDuration={product.warrantyDuration}
+                      isBundle={product.isBundle}
+                      bundleItemCount={product.bundleItems?.length}
                     />
                   </div>
                   <div className="mt-2 flex gap-2">
@@ -720,6 +769,45 @@ export default function Profile() {
             </div>
           )}
         </div>
+
+        {/* Expired Listings */}
+        {expiredListings.length > 0 && (
+          <div className="animate-fadeInUp bg-gradient-to-br from-white/10 via-white/5 to-transparent border border-white/20 rounded-2xl p-8 backdrop-blur-xl shadow-2xl shadow-orange-500/5">
+            <div className="mb-6">
+              <h2 className="text-3xl font-bold bg-gradient-to-r from-orange-400 to-amber-500 bg-clip-text text-transparent">Expired Listings</h2>
+              <p className="text-white/50 text-sm mt-1">Automatically taken down after 30 days with no activity — relist anytime.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {expiredListings.map((product) => (
+                <div
+                  key={product._id}
+                  className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl p-3 opacity-75"
+                >
+                  <img
+                    src={product.imageUrl || 'https://via.placeholder.com/64x64?text=No+Image'}
+                    alt={product.title}
+                    className="w-14 h-14 rounded-lg object-cover flex-shrink-0 grayscale"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-semibold text-sm truncate">{product.title}</p>
+                    <p className="text-white/40 text-xs flex items-center gap-1 mt-0.5">
+                      <Clock size={11} /> Expired
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleRelistProduct(product._id)}
+                    disabled={relistingId === product._id}
+                    className="premium-btn flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-yellow-400 to-amber-500 text-black rounded-lg font-semibold text-sm shadow-md shadow-yellow-400/20 disabled:opacity-50 flex-shrink-0"
+                  >
+                    <RotateCcw size={14} />
+                    {relistingId === product._id ? 'Relisting...' : 'Relist'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Sale Record Modal */}

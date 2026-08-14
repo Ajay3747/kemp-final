@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Camera, Image, Tag, DollarSign, Text, FileText, Compass, Send, X, Loader2, CheckCircle2, AlertTriangle, ShieldCheck, ShieldOff } from 'lucide-react';
+import { Camera, Image, Tag, DollarSign, Text, FileText, Compass, Send, X, Loader2, CheckCircle2, AlertTriangle, ShieldCheck, ShieldOff, Package, Plus, Layers } from 'lucide-react';
 
 const API_URL = "http://localhost:5000/api/products";
 
@@ -74,6 +74,18 @@ const categories = [
   'Books', 'Electronics', 'Dorm Essentials', 'Furniture', 'Apparel', 'Services', 'Other'
 ];
 
+const MAX_BUNDLE_ITEMS = 10;
+
+function makeEmptyBundleItem() {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    title: '',
+    description: '',
+    price: '',
+    image: null // { file, status: 'checking'|'valid'|'rejected'|'error', reason }
+  };
+}
+
 export default function SellingForm() {
   const [formData, setFormData] = useState({
     title: '',
@@ -88,6 +100,45 @@ export default function SellingForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+
+  // Bundle/lot: sell multiple items together as one listing, each with its
+  // own photo and price, priced as the sum of its items.
+  const [isBundle, setIsBundle] = useState(false);
+  const [bundleItems, setBundleItems] = useState([makeEmptyBundleItem(), makeEmptyBundleItem()]);
+
+  const bundleTotal = bundleItems.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
+
+  const addBundleItem = () => {
+    setBundleItems((prev) => (prev.length >= MAX_BUNDLE_ITEMS ? prev : [...prev, makeEmptyBundleItem()]));
+  };
+
+  const removeBundleItem = (id) => {
+    setBundleItems((prev) => (prev.length <= 2 ? prev : prev.filter((item) => item.id !== id)));
+  };
+
+  const updateBundleItem = (id, field, value) => {
+    setBundleItems((prev) => prev.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
+  };
+
+  const handleBundleItemImageChange = (id, file) => {
+    if (!file) return;
+    updateBundleItem(id, 'image', { file, status: 'checking', reason: null });
+
+    moderateImageFile(file).then((result) => {
+      setBundleItems((prev) => prev.map((item) => (
+        item.id === id && item.image?.file === file ? { ...item, image: { file, ...result } } : item
+      )));
+
+      if (result.status === 'rejected' && result.humanDetected) {
+        alertHumanDetected(result.reason);
+      } else if (result.status === 'error') {
+        alertVerificationFailed(result.reason);
+      }
+    });
+  };
+
+  const isCheckingBundleImages = bundleItems.some((item) => item.image?.status === 'checking');
+  const hasBlockedBundleImages = bundleItems.some((item) => item.image?.status === 'rejected' || item.image?.status === 'error');
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -168,14 +219,29 @@ export default function SellingForm() {
       return;
     }
 
-    if (isCheckingImages) {
-      setError('Please wait for image verification to finish.');
-      return;
-    }
-
-    if (hasBlockedImages) {
-      setError('Remove the flagged image(s) before submitting your listing.');
-      return;
+    if (isBundle) {
+      if (isCheckingBundleImages) {
+        setError('Please wait for bundle item image verification to finish.');
+        return;
+      }
+      if (hasBlockedBundleImages) {
+        setError('Remove the flagged bundle item image(s) before submitting.');
+        return;
+      }
+      const incomplete = bundleItems.some((item) => !item.title.trim() || !item.price || Number(item.price) <= 0 || !item.image || item.image.status !== 'valid');
+      if (incomplete) {
+        setError('Every bundle item needs a title, a price greater than 0, and a verified photo.');
+        return;
+      }
+    } else {
+      if (isCheckingImages) {
+        setError('Please wait for image verification to finish.');
+        return;
+      }
+      if (hasBlockedImages) {
+        setError('Remove the flagged image(s) before submitting your listing.');
+        return;
+      }
     }
 
     setLoading(true);
@@ -184,7 +250,6 @@ export default function SellingForm() {
       const form = new FormData();
       form.append('title', formData.title);
       form.append('description', formData.description);
-      form.append('price', formData.price);
       form.append('category', formData.category);
       form.append('condition', formData.condition);
       form.append('sellerId', userId);
@@ -193,8 +258,19 @@ export default function SellingForm() {
         form.append('warrantyDuration', formData.warrantyDuration.trim());
       }
 
-      if (formData.images.length > 0) {
-        form.append('image', formData.images[0].file);
+      if (isBundle) {
+        form.append('isBundle', 'true');
+        form.append('bundleItems', JSON.stringify(bundleItems.map((item) => ({
+          title: item.title.trim(),
+          description: item.description.trim(),
+          price: item.price
+        }))));
+        bundleItems.forEach((item) => form.append('bundleImages', item.image.file));
+      } else {
+        form.append('price', formData.price);
+        if (formData.images.length > 0) {
+          form.append('image', formData.images[0].file);
+        }
       }
 
       const response = await fetch(`${API_URL}/create`, {
@@ -227,6 +303,8 @@ export default function SellingForm() {
         warrantyDuration: '',
         images: []
       });
+      setIsBundle(false);
+      setBundleItems([makeEmptyBundleItem(), makeEmptyBundleItem()]);
 
       // Show success message
       alert('Item listed successfully! It will appear in the Dealing page.');
@@ -293,6 +371,37 @@ export default function SellingForm() {
               disabled={loading}
             ></textarea>
           </div>
+
+          <div>
+            <label className={labelStyle}><Layers size={20} className={iconStyle} />List as a Bundle/Lot?</label>
+            <p className="text-gray-400 text-sm mb-3">Sell several items together as one listing (e.g. a move-out lot) — each item gets its own photo and price.</p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setIsBundle(false)}
+                disabled={loading}
+                className={`flex-1 flex items-center justify-center gap-2 rounded-xl p-4 font-semibold border transition-all duration-200 ${
+                  !isBundle
+                    ? 'bg-gradient-to-r from-yellow-400 to-amber-500 text-black border-transparent shadow-md shadow-yellow-500/20'
+                    : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10'
+                }`}
+              >
+                Single Item
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsBundle(true)}
+                disabled={loading}
+                className={`flex-1 flex items-center justify-center gap-2 rounded-xl p-4 font-semibold border transition-all duration-200 ${
+                  isBundle
+                    ? 'bg-gradient-to-r from-yellow-400 to-amber-500 text-black border-transparent shadow-md shadow-yellow-500/20'
+                    : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10'
+                }`}
+              >
+                <Package size={18} /> Bundle/Lot
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -319,20 +428,27 @@ export default function SellingForm() {
           </div>
 
           <div>
-            <label htmlFor="price" className={labelStyle}><DollarSign size={20} className={iconStyle} />Price (₹)</label>
-            <input
-              id="price"
-              name="price"
-              type="number"
-              min="0"
-              step="0.01"
-              value={formData.price}
-              onChange={handleChange}
-              placeholder="e.g., 499"
-              className={inputStyle}
-              required
-              disabled={loading}
-            />
+            <label htmlFor="price" className={labelStyle}><DollarSign size={20} className={iconStyle} />{isBundle ? 'Bundle Total (₹)' : 'Price (₹)'}</label>
+            {isBundle ? (
+              <div className={`${inputStyle} bg-white/[0.03] text-yellow-400 font-bold`}>
+                ₹{bundleTotal.toLocaleString()}
+                <span className="block text-gray-500 font-normal text-sm mt-1">Auto-calculated from item prices below</span>
+              </div>
+            ) : (
+              <input
+                id="price"
+                name="price"
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.price}
+                onChange={handleChange}
+                placeholder="e.g., 499"
+                className={inputStyle}
+                required
+                disabled={loading}
+              />
+            )}
           </div>
         </div>
 
@@ -404,6 +520,7 @@ export default function SellingForm() {
       </div>
 
       {/* Image Upload */}
+      {!isBundle && (
       <div className={sectionStyle}>
         <h2 className="text-2xl sm:text-3xl font-bold text-yellow-400 mb-6">Item Photos</h2>
         <p className="text-gray-400 mb-4">Add high-quality photos to attract buyers.</p>
@@ -490,26 +607,167 @@ export default function SellingForm() {
           </p>
         )}
       </div>
+      )}
+
+      {/* Bundle Items */}
+      {isBundle && (
+      <div className={sectionStyle}>
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+          <h2 className="text-2xl sm:text-3xl font-bold text-yellow-400">Bundle Items</h2>
+          <button
+            type="button"
+            onClick={addBundleItem}
+            disabled={loading || bundleItems.length >= MAX_BUNDLE_ITEMS}
+            className="flex items-center gap-1.5 px-4 py-2 bg-white/10 text-white rounded-lg font-semibold hover:bg-white/20 disabled:opacity-50"
+          >
+            <Plus size={16} /> Add Item
+          </button>
+        </div>
+        <p className="text-gray-400 mb-6">Add at least 2 items — each needs its own title, price, and photo.</p>
+
+        <div className="space-y-6">
+          {bundleItems.map((item, index) => {
+            const img = item.image;
+            const isRejected = img && (img.status === 'rejected' || img.status === 'error');
+            const borderClass = isRejected ? 'border-red-500/70' : img?.status === 'valid' ? 'border-green-500/50' : 'border-white/10';
+
+            return (
+              <div key={item.id} className="bg-white/[0.03] border border-white/10 rounded-xl p-4 sm:p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-white font-bold">Item {index + 1}</h3>
+                  <button
+                    type="button"
+                    onClick={() => removeBundleItem(item.id)}
+                    disabled={loading || bundleItems.length <= 2}
+                    className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-400 disabled:opacity-30 disabled:hover:text-gray-400"
+                  >
+                    <X size={14} /> Remove
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-4">
+                    <input
+                      type="text"
+                      value={item.title}
+                      onChange={(e) => updateBundleItem(item.id, 'title', e.target.value)}
+                      placeholder="Item name, e.g. 'Study Lamp'"
+                      className={inputStyle}
+                      disabled={loading}
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={item.price}
+                      onChange={(e) => updateBundleItem(item.id, 'price', e.target.value)}
+                      placeholder="Item price (₹)"
+                      className={inputStyle}
+                      disabled={loading}
+                    />
+                    <textarea
+                      value={item.description}
+                      onChange={(e) => updateBundleItem(item.id, 'description', e.target.value)}
+                      rows="2"
+                      placeholder="Short description (optional)"
+                      className={inputStyle}
+                      disabled={loading}
+                    />
+                  </div>
+
+                  <div>
+                    {img ? (
+                      <div className={`relative aspect-video rounded-xl overflow-hidden shadow-lg border group ${borderClass}`}>
+                        <img
+                          src={URL.createObjectURL(img.file)}
+                          alt={item.title || `Bundle item ${index + 1}`}
+                          className={`w-full h-full object-cover ${isRejected ? 'opacity-50' : ''}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => updateBundleItem(item.id, 'image', null)}
+                          className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-lg hover:scale-110"
+                          title="Remove photo"
+                        >
+                          <X size={16} />
+                        </button>
+                        {img.status === 'checking' && (
+                          <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-1.5 text-white text-xs font-semibold">
+                            <Loader2 size={20} className="animate-spin text-yellow-400" />
+                            Checking image...
+                          </div>
+                        )}
+                        {img.status === 'valid' && (
+                          <span className="absolute bottom-2 right-2 bg-green-500/90 text-white rounded-full p-1 shadow">
+                            <CheckCircle2 size={14} />
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <label
+                        htmlFor={`bundle-image-${item.id}`}
+                        className={`group flex items-center justify-center w-full h-full min-h-[8rem] bg-white/[0.02] rounded-xl text-gray-500 border-2 border-dashed border-white/15 hover:border-yellow-400/60 hover:bg-yellow-400/[0.03] ${loading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                      >
+                        <div className="flex flex-col items-center">
+                          <Image size={22} className="text-yellow-400 mb-1.5" />
+                          <span className="text-sm">Upload photo</span>
+                        </div>
+                        <input
+                          id={`bundle-image-${item.id}`}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          disabled={loading}
+                          onChange={(e) => handleBundleItemImageChange(item.id, e.target.files[0])}
+                        />
+                      </label>
+                    )}
+                    {isRejected && (
+                      <p className="flex items-start gap-1.5 text-xs text-red-300 leading-snug mt-1.5">
+                        <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                        {img.reason || 'This image was not accepted.'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="mt-6 flex justify-end items-baseline gap-2">
+          <span className="text-gray-400">Bundle Total:</span>
+          <span className="text-2xl font-bold text-yellow-400">₹{bundleTotal.toLocaleString()}</span>
+        </div>
+      </div>
+      )}
 
       {/* Submit Button */}
-      <div className="text-center">
-        <button
-          type="submit"
-          disabled={loading || isCheckingImages || hasBlockedImages}
-          className={`premium-btn font-bold py-4 px-12 rounded-full text-lg shadow-lg flex items-center justify-center mx-auto ${
-            loading || isCheckingImages || hasBlockedImages
-              ? 'bg-gray-500 text-gray-300 cursor-not-allowed'
-              : 'bg-gradient-to-r from-yellow-400 to-amber-500 text-black shadow-yellow-500/25'
-          }`}
-        >
-          {isCheckingImages ? (
-            <Loader2 size={20} className="mr-3 animate-spin" />
-          ) : (
-            <Send size={20} className="mr-3" />
-          )}
-          {loading ? 'Listing Item...' : isCheckingImages ? 'Checking Images...' : 'List Item Now'}
-        </button>
-      </div>
+      {(() => {
+        const checkingImages = isBundle ? isCheckingBundleImages : isCheckingImages;
+        const blockedImages = isBundle ? hasBlockedBundleImages : hasBlockedImages;
+        const disabled = loading || checkingImages || blockedImages;
+        return (
+          <div className="text-center">
+            <button
+              type="submit"
+              disabled={disabled}
+              className={`premium-btn font-bold py-4 px-12 rounded-full text-lg shadow-lg flex items-center justify-center mx-auto ${
+                disabled
+                  ? 'bg-gray-500 text-gray-300 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-yellow-400 to-amber-500 text-black shadow-yellow-500/25'
+              }`}
+            >
+              {checkingImages ? (
+                <Loader2 size={20} className="mr-3 animate-spin" />
+              ) : (
+                <Send size={20} className="mr-3" />
+              )}
+              {loading ? 'Listing Item...' : checkingImages ? 'Checking Images...' : isBundle ? 'List Bundle Now' : 'List Item Now'}
+            </button>
+          </div>
+        );
+      })()}
     </form>
   );
 }

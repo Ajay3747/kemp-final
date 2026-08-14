@@ -6,9 +6,16 @@ const Product = require('../models/Product');
 // Create a post and notify all users (except author)
 exports.createPost = async (req, res) => {
   try {
-    const { userId, title, content, productId } = req.body;
+    const { userId, title, content, productId, type, lostFoundStatus, location } = req.body;
     if (!userId || !title) {
       return res.status(400).json({ message: 'userId and title are required' });
+    }
+
+    const isLostFound = type === 'lostfound';
+    // Found posts are no longer creatable — the board only accepts Lost
+    // reports; recovery happens via Contact Owner + Mark Resolved instead.
+    if (isLostFound && lostFoundStatus !== 'lost') {
+      return res.status(400).json({ message: "Lost & Found posts can only be created with status 'lost'." });
     }
 
     const user = await User.findById(userId).select('username isAdmin collegeEmail phone rollNo department');
@@ -40,18 +47,24 @@ exports.createPost = async (req, res) => {
       title,
       content: content || '',
       imageUrl,
-      productId: linkedProductId
+      productId: linkedProductId,
+      type: isLostFound ? 'lostfound' : 'general',
+      lostFoundStatus: isLostFound ? lostFoundStatus : null,
+      location: isLostFound ? (location || '') : ''
     });
 
     // notify all users (except the author)
     try {
       const recipients = await User.find({ _id: { $ne: userId } }).select('_id');
+      const notificationTitle = isLostFound
+        ? `Lost item: ${title}`
+        : `New community post: ${title}`;
       const notifications = recipients.map(r => ({
         recipientId: r._id,
         senderId: userId,
         productId: post._id,
         type: 'community_post',
-        title: `New community post: ${title}`,
+        title: notificationTitle,
         message: `${user.username} shared ${title}`,
         buyerDetails: {
           name: user.username,
@@ -84,7 +97,7 @@ exports.createPost = async (req, res) => {
 exports.getPosts = async (_req, res) => {
   try {
     const posts = await CommunityPost.find()
-      .sort({ createdAt: -1 })
+      .sort({ isPinned: -1, createdAt: -1 })
       .populate('productId', 'title price imageUrl status sellerId');
     res.json(posts);
   } catch (error) {
@@ -115,6 +128,70 @@ exports.deletePost = async (req, res) => {
     res.json({ message: 'Post deleted' });
   } catch (error) {
     console.error('Delete community post error:', error);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// Mark a Lost & Found post as resolved (owner only)
+exports.resolveLostFound = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId } = req.body;
+    if (!userId) {
+      return res.status(400).json({ message: 'userId is required' });
+    }
+
+    const post = await CommunityPost.findById(id);
+    if (!post) {
+      return res.status(404).json({ message: 'Post not found' });
+    }
+
+    if (post.userId.toString() !== userId) {
+      return res.status(403).json({ message: 'Not authorized to resolve this post' });
+    }
+
+    if (post.type !== 'lostfound') {
+      return res.status(400).json({ message: 'Only Lost & Found posts can be resolved' });
+    }
+
+    post.lostFoundStatus = 'resolved';
+    await post.save();
+
+    res.json({ message: 'Post marked as resolved', post });
+  } catch (error) {
+    console.error('Resolve lost & found post error:', error);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// Reveal a Lost & Found post owner's contact number (authenticated users
+// only — req.user is set by the isAuthenticated middleware on this route).
+// Phone numbers are never included in the public getPosts feed; they are
+// only handed out through this dedicated, auth-gated lookup.
+exports.getContactInfo = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const post = await CommunityPost.findById(id);
+    if (!post) {
+      return res.status(404).json({ message: 'Post not found' });
+    }
+
+    if (post.type !== 'lostfound') {
+      return res.status(400).json({ message: 'Contact info is only available for Lost & Found posts' });
+    }
+
+    const owner = await User.findById(post.userId).select('username phone phoneNumber');
+    if (!owner) {
+      return res.status(404).json({ message: 'Post owner not found' });
+    }
+
+    res.json({
+      username: owner.username,
+      phone: owner.phone || owner.phoneNumber || ''
+    });
+  } catch (error) {
+    console.error('Get contact info error:', error);
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };

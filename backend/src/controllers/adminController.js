@@ -5,6 +5,7 @@ const Order = require('../models/Order');
 const Report = require('../models/Report');
 const Category = require('../models/Category');
 const Notification = require('../models/Notification');
+const CommunityPost = require('../models/CommunityPost');
 
 const isValidObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -713,6 +714,63 @@ exports.listAnnouncements = async (req, res) => {
     res.json(announcements);
   } catch (error) {
     console.error('List announcements error:', error);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Pinned Community notices — deliberately separate from the broadcast
+// announcements above. Those push a Notification to every student; these
+// just pin a notice at the top of the Community board itself, for anyone
+// who visits it. Backed by CommunityPost (type: 'announcement', isPinned),
+// not Notification, so the two systems can't be confused with one another.
+// ---------------------------------------------------------------------------
+
+exports.pinAnnouncement = async (req, res) => {
+  try {
+    const title = (req.body.title || '').trim();
+    const content = (req.body.content || '').trim();
+    if (!title) {
+      return res.status(400).json({ message: 'Title is required.' });
+    }
+
+    const post = await CommunityPost.create({
+      userId: req.adminUser._id,
+      username: req.adminUser.username,
+      title,
+      content,
+      type: 'announcement',
+      isPinned: true
+    });
+
+    res.status(201).json({ message: 'Notice pinned to Community board.', post });
+  } catch (error) {
+    console.error('Pin announcement error:', error);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+exports.listPinnedAnnouncements = async (req, res) => {
+  try {
+    const posts = await CommunityPost.find({ type: 'announcement', isPinned: true })
+      .sort({ createdAt: -1 });
+    res.json(posts);
+  } catch (error) {
+    console.error('List pinned announcements error:', error);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+exports.unpinAnnouncement = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const post = await CommunityPost.findOneAndDelete({ _id: id, type: 'announcement' });
+    if (!post) {
+      return res.status(404).json({ message: 'Pinned notice not found.' });
+    }
+    res.json({ message: 'Notice unpinned.' });
+  } catch (error) {
+    console.error('Unpin announcement error:', error);
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };

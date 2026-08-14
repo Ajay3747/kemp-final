@@ -143,7 +143,7 @@ exports.createOrder = async (req, res) => {
           productId: product._id,
           type: 'purchase_request',
           title: `🛒 New Deal Request`,
-          message: `Someone wants to buy your "${product.title}".`,
+          message: `${buyer.username || 'A KEMP user'} wants to buy your "${product.title}".`,
           buyerDetails: {
             name: buyer.username,
             email: buyer.collegeEmail,

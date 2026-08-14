@@ -116,6 +116,8 @@ export default function Notifications() {
       navigate(`/my-orders?tab=warranties`);
     } else if (notification.metadata?.orderId) {
       navigate(`/my-orders?orderId=${notification.metadata.orderId}`);
+    } else if (notification.type === 'listing_expired') {
+      navigate('/profile');
     } else if (notification.type === 'message' && notification.metadata?.conversationId) {
       navigate(`/chat/${notification.metadata.conversationId}`);
     }

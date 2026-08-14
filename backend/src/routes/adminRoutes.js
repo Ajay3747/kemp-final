@@ -50,4 +50,9 @@ router.delete('/categories/:id', adminController.deleteCategory);
 router.post('/announcements', adminController.sendAnnouncement);
 router.get('/announcements', adminController.listAnnouncements);
 
+// Pinned Community notices (separate mechanism from the broadcast above)
+router.post('/pinned-posts', adminController.pinAnnouncement);
+router.get('/pinned-posts', adminController.listPinnedAnnouncements);
+router.delete('/pinned-posts/:id', adminController.unpinAnnouncement);
+
 module.exports = router;

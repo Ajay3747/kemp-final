@@ -18,7 +18,7 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['purchase_request', 'review', 'message', 'other', 'staff_report', 'community_post', 'community_like', 'community_comment', 'order_status_update', 'announcement', 'warranty_expiring', 'blood_request'],
+    enum: ['purchase_request', 'review', 'message', 'other', 'staff_report', 'community_post', 'community_like', 'community_comment', 'order_status_update', 'announcement', 'warranty_expiring', 'blood_request', 'listing_expired'],
     default: 'purchase_request'
   },
   title: {

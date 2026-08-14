@@ -36,6 +36,7 @@ const { verifyEmailTransport } = require('./utils/emailService');
 const { verifyTwilioConfig } = require('./utils/smsService');
 const { warmUp: warmUpPersonDetector } = require('./services/imageModeration/localPersonDetector');
 const { startWarrantyReminderJob } = require('./jobs/warrantyReminderJob');
+const { startListingExpiryJob } = require('./jobs/listingExpiryJob');
 app.use('/api/auth', authRoutes);
 
 // Downloads/loads the person-detection model in the background now, so the
@@ -45,6 +46,9 @@ warmUpPersonDetector();
 
 // Daily check for warranties entering their "expiring soon" window.
 startWarrantyReminderJob();
+
+// Daily check for listings that have passed their 30-day expiry window.
+startListingExpiryJob();
 
 (async () => {
   try {

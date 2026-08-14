@@ -14,6 +14,15 @@ const communityPostSchema = new mongoose.Schema({
   content: { type: String, default: '' },
   imageUrl: { type: String, default: '' },
   productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', default: null },
+  type: { type: String, enum: ['general', 'lostfound', 'announcement'], default: 'general' },
+  // 'found' is retained only so pre-existing documents keep validating —
+  // the composer/API no longer allow creating new 'found' posts.
+  lostFoundStatus: { type: String, enum: ['lost', 'found', 'resolved'], default: null },
+  location: { type: String, default: '' },
+  // Admin-only pinned notices (see adminController.pinAnnouncement) — a
+  // separate, lightweight mechanism from the broadcast-to-everyone
+  // Notification-based announcement system in adminController.
+  isPinned: { type: Boolean, default: false },
   likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   comments: [commentSchema],
   createdAt: { type: Date, default: Date.now }

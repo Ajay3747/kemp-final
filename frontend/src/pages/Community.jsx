@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Post from '../components/Post';
 import Core from '../components/core';
-import { Image, Search, X, Users } from 'lucide-react';
+import { Image, Search, X, Users, MapPin, SearchCheck } from 'lucide-react';
 
 const API_URL = 'http://localhost:5000/api/community';
 const PRODUCTS_API_URL = 'http://localhost:5000/api/products';
@@ -19,12 +19,18 @@ export default function Community() {
   const [searchQuery, setSearchQuery] = useState('');
   const [myProducts, setMyProducts] = useState([]);
   const [linkedProductId, setLinkedProductId] = useState('');
+  const [postType, setPostType] = useState('general'); // 'general' | 'lostfound'
+  const [lostFoundStatus] = useState('lost'); // fixed — Found posts can no longer be created
+  const [location, setLocation] = useState('');
+  const [boardFilter, setBoardFilter] = useState('all'); // 'all' | 'general' | 'lostfound'
 
   const userId = localStorage.getItem('userId');
   const userData = JSON.parse(localStorage.getItem('userData') || '{}');
 
-  // Filter posts based on search query
+  // Filter posts based on search query and the General / Lost & Found tab
   const filteredPosts = posts.filter((post) => {
+    if (boardFilter !== 'all' && (post.type || 'general') !== boardFilter) return false;
+
     const q = searchQuery.trim().toLowerCase();
     if (!q) return true;
 
@@ -66,13 +72,16 @@ export default function Community() {
     }
   };
 
+  const isLostFound = postType === 'lostfound';
+
   const handleSubmit = async () => {
     if (!userId) {
       alert('Please login to post');
       return;
     }
-    if (!title || !imageFile) {
-      alert('Please provide product name and upload an image');
+    // Lost & Found posts don't require a photo — not every lost item has one.
+    if (!title || (!isLostFound && !imageFile)) {
+      alert(isLostFound ? 'Please provide a title for the item.' : 'Please provide product name and upload an image');
       return;
     }
 
@@ -84,9 +93,16 @@ export default function Community() {
       formData.append('userId', userId);
       formData.append('title', title);
       formData.append('content', content);
-      formData.append('image', imageFile);
+      if (imageFile) {
+        formData.append('image', imageFile);
+      }
       if (linkedProductId) {
         formData.append('productId', linkedProductId);
+      }
+      if (isLostFound) {
+        formData.append('type', 'lostfound');
+        formData.append('lostFoundStatus', lostFoundStatus);
+        formData.append('location', location);
       }
 
       const res = await fetch(API_URL, {
@@ -106,6 +122,7 @@ export default function Community() {
       setImagePreview('');
       setContent('');
       setLinkedProductId('');
+      setLocation('');
       await fetchPosts();
       alert('Posted to community and notified all users!');
     } catch (err) {
@@ -113,6 +130,50 @@ export default function Community() {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleContactOwner = async (postId) => {
+    const token = localStorage.getItem('token');
+    if (!userId || !token) {
+      alert('Please login to contact the owner.');
+      return;
+    }
+    try {
+      const res = await fetch(`${API_URL}/${postId}/contact`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to fetch contact info');
+      }
+      alert(`Contact ${data.username}${data.phone ? ` at ${data.phone}` : ' — no phone number on file, try commenting on the post instead.'}`);
+    } catch (err) {
+      console.error('Contact owner error:', err);
+      alert(err.message);
+    }
+  };
+
+  const handleResolve = async (postId) => {
+    if (!userId) return;
+    try {
+      const res = await fetch(`${API_URL}/${postId}/resolve`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        },
+        body: JSON.stringify({ userId })
+      });
+      if (!res.ok) {
+        throw new Error('Failed to mark post as resolved');
+      }
+      setPosts((prev) => prev.map((p) =>
+        p._id === postId ? { ...p, lostFoundStatus: 'resolved' } : p
+      ));
+    } catch (err) {
+      console.error('Resolve post error:', err);
+      setError(err.message);
     }
   };
 
@@ -240,6 +301,27 @@ export default function Community() {
           )}
         </div>
 
+        {/* Board Filter Tabs */}
+        <div className="flex gap-2 mb-6 animate-fadeInUp">
+          {[
+            { key: 'all', label: 'All Posts' },
+            { key: 'general', label: 'General' },
+            { key: 'lostfound', label: 'Lost & Found' }
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setBoardFilter(tab.key)}
+              className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                boardFilter === tab.key
+                  ? 'bg-yellow-400 text-black'
+                  : 'bg-white/5 text-gray-300 border border-white/10 hover:bg-white/10'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         {/* Post Creation Section */}
         <div className="bg-gradient-to-br from-white/[0.07] to-white/[0.02] border border-white/10 rounded-2xl p-6 mb-8 backdrop-blur-sm shadow-xl animate-fadeInUp">
           {error && (
@@ -248,18 +330,59 @@ export default function Community() {
             </div>
           )}
 
+          {/* Post Type Toggle */}
+          <div className="flex gap-3 mb-4">
+            <button
+              type="button"
+              onClick={() => setPostType('general')}
+              className={`flex-1 flex items-center justify-center gap-2 rounded-xl p-3 font-semibold border transition-all duration-200 ${
+                !isLostFound
+                  ? 'bg-gradient-to-r from-yellow-400 to-amber-500 text-black border-transparent shadow-md shadow-yellow-500/20'
+                  : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10'
+              }`}
+            >
+              <Users size={16} /> General Post
+            </button>
+            <button
+              type="button"
+              onClick={() => setPostType('lostfound')}
+              className={`flex-1 flex items-center justify-center gap-2 rounded-xl p-3 font-semibold border transition-all duration-200 ${
+                isLostFound
+                  ? 'bg-gradient-to-r from-yellow-400 to-amber-500 text-black border-transparent shadow-md shadow-yellow-500/20'
+                  : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10'
+              }`}
+            >
+              <SearchCheck size={16} /> Lost &amp; Found
+            </button>
+          </div>
+
+          {isLostFound && (
+            <div className="mb-4 animate-fadeIn">
+              <label className="text-sm text-gray-400 mb-2 block">Last Seen Location</label>
+              <div className="relative">
+                <MapPin size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                <input
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  className="premium-input w-full bg-white/5 border border-white/10 rounded-xl p-3 pl-10 text-white placeholder-gray-500 focus:outline-none"
+                  placeholder="e.g. Library, Block C canteen"
+                />
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="text-sm text-gray-400 mb-2 block">Product Name</label>
+              <label className="text-sm text-gray-400 mb-2 block">{isLostFound ? 'Item Name' : 'Product Name'}</label>
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className="premium-input w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white placeholder-gray-500 focus:outline-none"
-                placeholder="Enter product name"
+                placeholder={isLostFound ? 'e.g. Black umbrella' : 'Enter product name'}
               />
             </div>
             <div>
-              <label className="text-sm text-gray-400 mb-2 block">Product Image</label>
+              <label className="text-sm text-gray-400 mb-2 block">{isLostFound ? 'Photo (optional)' : 'Product Image'}</label>
               <div className="relative">
                 <label
                   htmlFor="community-image-upload"
@@ -317,7 +440,7 @@ export default function Community() {
             placeholder="Add details..."
           />
 
-          {myProducts.length > 0 && (
+          {!isLostFound && myProducts.length > 0 && (
             <div className="mt-4">
               <label className="text-sm text-gray-400 mb-2 block">Link to your listing (optional)</label>
               <select
@@ -341,7 +464,7 @@ export default function Community() {
               disabled={loading}
               className="premium-btn bg-gradient-to-r from-yellow-400 to-amber-500 text-black font-bold py-2.5 px-6 rounded-full text-sm shadow-md shadow-yellow-500/20 disabled:opacity-60"
             >
-              {loading ? 'Posting...' : 'Post to Community'}
+              {loading ? 'Posting...' : isLostFound ? 'Report Lost & Found' : 'Post to Community'}
             </button>
           </div>
         </div>
@@ -372,6 +495,11 @@ export default function Community() {
                   currentUserId={userId}
                   product={post.productId && typeof post.productId === 'object' ? post.productId : null}
                   onViewProduct={handleViewProduct}
+                  type={post.type}
+                  lostFoundStatus={post.lostFoundStatus}
+                  location={post.location}
+                  onResolve={() => handleResolve(post._id)}
+                  onContactOwner={() => handleContactOwner(post._id)}
                 />
               </div>
             ))

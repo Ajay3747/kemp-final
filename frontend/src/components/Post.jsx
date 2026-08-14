@@ -1,5 +1,11 @@
 import React, { useState } from 'react';
-import { UserCircle2, MessageSquare, Heart, Image as ImageIcon, Trash2, Send, ChevronDown, ChevronUp, ShoppingBag } from 'lucide-react';
+import { UserCircle2, MessageSquare, Heart, Image as ImageIcon, Trash2, Send, ChevronDown, ChevronUp, ShoppingBag, MapPin, CheckCircle2, Pin, Phone } from 'lucide-react';
+
+const LOST_FOUND_BADGE = {
+  lost: { label: 'LOST', className: 'bg-red-500/20 border-red-500/50 text-red-300' },
+  found: { label: 'FOUND', className: 'bg-green-500/20 border-green-500/50 text-green-300' },
+  resolved: { label: 'RESOLVED', className: 'bg-white/10 border-white/20 text-white/60' }
+};
 
 export default function Post({
   user,
@@ -16,7 +22,12 @@ export default function Post({
   currentUserId,
   postId,
   product,
-  onViewProduct
+  onViewProduct,
+  type,
+  lostFoundStatus,
+  location,
+  onResolve,
+  onContactOwner
 }) {
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -40,24 +51,43 @@ export default function Post({
     setSubmitting(false);
   };
 
+  const isAnnouncement = type === 'announcement';
+
   return (
-    <div className="premium-card p-6 hover:-translate-y-0.5">
+    <div className={`premium-card p-6 hover:-translate-y-0.5 ${isAnnouncement ? 'border-yellow-400/50 bg-yellow-400/[0.04]' : ''}`}>
       {/* Post Header */}
       <div className="flex items-center mb-4">
-        <div className="mr-4 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-yellow-400 to-amber-500 text-black transition-transform duration-300 hover:scale-105">
-          <UserCircle2 size={30} />
+        <div className={`mr-4 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full text-black transition-transform duration-300 hover:scale-105 ${isAnnouncement ? 'bg-gradient-to-br from-yellow-300 to-yellow-500' : 'bg-gradient-to-br from-yellow-400 to-amber-500'}`}>
+          {isAnnouncement ? <Pin size={22} /> : <UserCircle2 size={30} />}
         </div>
         <div>
-          <h4 className="text-white font-semibold text-lg">{user.name}</h4>
+          <h4 className="text-white font-semibold text-lg flex items-center gap-2">
+            {user.name}
+            {isAnnouncement && (
+              <span className="px-2 py-0.5 border border-yellow-400/50 bg-yellow-400/10 text-yellow-300 text-xs font-bold rounded-full">
+                PINNED
+              </span>
+            )}
+          </h4>
           <span className="text-gray-500 text-sm">{time}</span>
         </div>
       </div>
 
       {/* Post Content */}
       {title && (
-        <h3 className="text-xl font-bold text-yellow-400 mb-2 flex items-center gap-2">
+        <h3 className="text-xl font-bold text-yellow-400 mb-2 flex items-center gap-2 flex-wrap">
           <ImageIcon size={18} /> {title}
+          {type === 'lostfound' && lostFoundStatus && LOST_FOUND_BADGE[lostFoundStatus] && (
+            <span className={`px-2 py-0.5 border text-xs font-bold rounded-full ${LOST_FOUND_BADGE[lostFoundStatus].className}`}>
+              {LOST_FOUND_BADGE[lostFoundStatus].label}
+            </span>
+          )}
         </h3>
+      )}
+      {type === 'lostfound' && location && (
+        <p className="flex items-center gap-1.5 text-gray-400 text-sm mb-2">
+          <MapPin size={14} className="text-yellow-400" /> {location}
+        </p>
       )}
       <div className="text-gray-300 text-base leading-relaxed mb-4">
         <p>{content}</p>
@@ -99,6 +129,22 @@ export default function Post({
             className="flex items-center gap-2 px-3 py-2 bg-yellow-400/10 text-yellow-300 rounded-lg hover:bg-yellow-400/20 transition-all duration-200 hover:scale-105"
           >
             <ShoppingBag size={16} /> View Product
+          </button>
+        )}
+        {canDelete && type === 'lostfound' && lostFoundStatus !== 'resolved' && (
+          <button
+            onClick={onResolve}
+            className="flex items-center gap-2 px-3 py-2 bg-green-500/10 text-green-300 rounded-lg hover:bg-green-500/20 transition-all duration-200 hover:scale-105"
+          >
+            <CheckCircle2 size={16} /> Mark Resolved
+          </button>
+        )}
+        {!canDelete && type === 'lostfound' && lostFoundStatus === 'lost' && currentUserId && (
+          <button
+            onClick={onContactOwner}
+            className="flex items-center gap-2 px-3 py-2 bg-blue-500/10 text-blue-300 rounded-lg hover:bg-blue-500/20 transition-all duration-200 hover:scale-105"
+          >
+            <Phone size={16} /> Contact Owner
           </button>
         )}
         {canDelete && (
