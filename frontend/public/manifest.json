@@ -1,0 +1,11 @@
+{
+  "name": "KEMP - Campus Marketplace",
+  "short_name": "KEMP",
+  "start_url": "/home",
+  "display": "standalone",
+  "background_color": "#070b18",
+  "theme_color": "#facc15",
+  "icons": [
+    { "src": "/vite.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

@@ -31,6 +31,7 @@ const adminRoutes = require('./routes/adminRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const ratingRoutes = require('./routes/ratingRoutes');
 const bloodRequestRoutes = require('./routes/bloodRequestRoutes');
+const pushRoutes = require('./routes/pushRoutes');
 const { verifyEmailTransport } = require('./utils/emailService');
 const { verifyTwilioConfig } = require('./utils/smsService');
 const { warmUp: warmUpPersonDetector } = require('./services/imageModeration/localPersonDetector');
@@ -63,6 +64,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/ratings', ratingRoutes);
 app.use('/api/blood-requests', bloodRequestRoutes);
+app.use('/api/push', pushRoutes);
 
 // Test endpoint
 app.get('/api/test', (req, res) => {

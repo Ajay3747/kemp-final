@@ -40,6 +40,12 @@ const orderSchema = new mongoose.Schema({
   // overwritten afterward.
   completedAt: { type: Date, default: null },
 
+  // One-time token generated when the order enters READY_FOR_HANDOVER,
+  // encoded into a QR code the seller shows the buyer in person. Only the
+  // buyer, holding this exact token, can complete the order via
+  // POST /:orderId/confirm-handover — cleared (single-use) once redeemed.
+  handoverToken: { type: String, default: null },
+
   // Per-side "removed from history" flags. This is a visibility toggle only —
   // it never touches status/product fields, so a deleted history record still
   // exists in full for the other party and the order's real lifecycle is untouched.

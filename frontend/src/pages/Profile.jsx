@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import UserProfile from '../components/UserProfile';
 import ItemCard from '../components/ItemCard';
 import SaleRecordModal from '../components/SaleRecordModal';
-import { ShoppingBag, Star, LayoutDashboard, LogOut, Edit2, TrendingUp, Bell, ClipboardList, User, Mail, Phone, Calendar, Hash, Building2, Award, X, ShieldCheck, ShieldOff, Droplet, MessageCircle } from 'lucide-react';
+import { ShoppingBag, Star, LayoutDashboard, LogOut, Edit2, TrendingUp, Bell, BellOff, ClipboardList, User, Mail, Phone, Calendar, Hash, Building2, Award, X, ShieldCheck, ShieldOff, Droplet, MessageCircle } from 'lucide-react';
+import { getPushSubscriptionStatus, enablePushNotifications, disablePushNotifications } from '../utils/pushApi';
 
 const API_URL = "http://localhost:5000/api";
 
@@ -21,6 +22,9 @@ export default function Profile() {
   const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [savingAvailability, setSavingAvailability] = useState(false);
+  const [pushStatus, setPushStatus] = useState('checking'); // 'checking' | 'unsupported' | 'not-subscribed' | 'subscribed'
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushError, setPushError] = useState('');
   const [editingWarrantyProduct, setEditingWarrantyProduct] = useState(null);
   const [warrantyDraft, setWarrantyDraft] = useState({ available: false, duration: '' });
   const [savingWarranty, setSavingWarranty] = useState(false);
@@ -201,6 +205,36 @@ export default function Profile() {
       alert('Failed to update donation availability: ' + err.message);
     } finally {
       setSavingAvailability(false);
+    }
+  };
+
+  useEffect(() => {
+    getPushSubscriptionStatus().then(setPushStatus);
+  }, []);
+
+  const handleEnablePush = async () => {
+    setPushBusy(true);
+    setPushError('');
+    try {
+      await enablePushNotifications();
+      setPushStatus('subscribed');
+    } catch (err) {
+      setPushError(err.message);
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const handleDisablePush = async () => {
+    setPushBusy(true);
+    setPushError('');
+    try {
+      await disablePushNotifications();
+      setPushStatus('not-subscribed');
+    } catch (err) {
+      setPushError(err.message);
+    } finally {
+      setPushBusy(false);
     }
   };
 
@@ -562,6 +596,56 @@ export default function Profile() {
               <ShieldOff size={18} /> Not Available
             </button>
           </div>
+        </div>
+
+        {/* Push Notifications */}
+        <div className="animate-fadeInUp bg-gradient-to-br from-white/10 via-white/5 to-transparent border border-white/20 rounded-2xl p-8 backdrop-blur-xl shadow-2xl shadow-yellow-500/5 hover:border-yellow-400/30 transition-all duration-500">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="bg-yellow-500/20 p-2.5 rounded-lg">
+              <Bell className="text-yellow-400" size={22} />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-white">Push Notifications</h2>
+              <p className="text-white/50 text-sm">Get deal updates, blood requests and warranty alerts even when KEMP isn't open</p>
+            </div>
+          </div>
+
+          {pushStatus === 'unsupported' ? (
+            <p className="text-white/50 text-sm mt-2">Not supported on this device/browser.</p>
+          ) : (
+            <>
+              <p className="text-white/50 text-sm mb-5 mt-2">
+                Your browser will ask for permission the first time you enable this. You can turn it off anytime.
+              </p>
+              {pushError && <p className="text-red-300 text-sm mb-4">{pushError}</p>}
+              <div className="flex gap-3 max-w-md">
+                <button
+                  type="button"
+                  onClick={handleEnablePush}
+                  disabled={pushBusy || pushStatus === 'checking'}
+                  className={`flex-1 flex items-center justify-center gap-2 rounded-xl p-4 font-semibold border transition-all duration-200 disabled:opacity-50 ${
+                    pushStatus === 'subscribed'
+                      ? 'bg-gradient-to-r from-yellow-400 to-amber-500 text-black border-transparent shadow-md shadow-yellow-500/20'
+                      : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10'
+                  }`}
+                >
+                  <Bell size={18} /> Enabled
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDisablePush}
+                  disabled={pushBusy || pushStatus === 'checking'}
+                  className={`flex-1 flex items-center justify-center gap-2 rounded-xl p-4 font-semibold border transition-all duration-200 disabled:opacity-50 ${
+                    pushStatus !== 'subscribed'
+                      ? 'bg-gradient-to-r from-red-500 to-rose-600 text-white border-transparent shadow-md shadow-red-500/20'
+                      : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10'
+                  }`}
+                >
+                  <BellOff size={18} /> Disabled
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         {/* My Listings */}

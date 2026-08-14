@@ -22,6 +22,7 @@ import Community from "./pages/Community";
 import Profile from "./pages/Profile";
 import Notifications from "./pages/Notifications";
 import MyOrders from "./pages/MyOrders";
+import ConfirmHandover from "./pages/ConfirmHandover";
 import Chat from "./pages/Chat";
 import OtpVerificationPage from "./pages/OtpVerificationPage";
 
@@ -224,6 +225,19 @@ function AppContent() {
           />
 
           <Route
+            path="/confirm-handover/:orderId"
+            element={
+              <>
+                <Navbar />
+                <main className="container mx-auto p-4">
+                  <ConfirmHandover />
+                </main>
+                <Footer />
+              </>
+            }
+          />
+
+          <Route
             path="/blood-requests/:id"
             element={
               <>
@@ -279,7 +293,7 @@ function AppContent() {
         )}
 
         {/* Floating Map button (not visible on login page) */}
-        {location.pathname !== "/" && location.pathname !== "/admin-login" && location.pathname !== "/verify-email" && (
+        {location.pathname !== "/" && location.pathname !== "/admin-login" && location.pathname !== "/verify-email" && !location.pathname.startsWith("/confirm-handover") && (
           <MapButton onClick={toggleMap} />
         )}
       </div>

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const User = require('../models/User');
@@ -283,6 +284,11 @@ exports.updateOrderStatus = async (req, res) => {
       // this is set exactly once.
       order.completedAt = new Date();
     }
+    if (status === 'READY_FOR_HANDOVER') {
+      // Fresh single-use token for the QR the seller shows the buyer —
+      // regenerated every time the order (re-)enters this status.
+      order.handoverToken = crypto.randomBytes(24).toString('hex');
+    }
     await order.save();
 
     // COMPLETED -> permanently SOLD, stays hidden from the store.
@@ -356,6 +362,57 @@ exports.cancelOrder = async (req, res) => {
     res.json({ message: 'Deal cancelled successfully', order });
   } catch (error) {
     console.error('Cancel order error:', error);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// POST /api/orders/:orderId/confirm-handover — buyer scans the seller's QR
+// code and confirms receipt. This is the buyer-driven counterpart to the
+// seller's direct "Mark Completed" (still available in updateOrderStatus as
+// a manual fallback) — the intended primary path once a handoverToken exists.
+exports.confirmHandover = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { token } = req.body;
+
+    if (!isValidObjectId(orderId)) {
+      return res.status(400).json({ message: 'Invalid order id.' });
+    }
+    if (!token) {
+      return res.status(400).json({ message: 'A confirmation token is required.' });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found.' });
+    }
+    if (order.buyerId.toString() !== req.user.userId) {
+      return res.status(403).json({ message: 'Only the buyer of this order can confirm handover.' });
+    }
+    if (order.status !== 'READY_FOR_HANDOVER') {
+      return res.status(400).json({ message: `This order is ${order.status.toLowerCase().replace(/_/g, ' ')} and can't be confirmed right now.` });
+    }
+    if (!order.handoverToken || order.handoverToken !== token) {
+      return res.status(400).json({ message: 'This confirmation code is invalid or has expired. Ask the seller to show you a fresh QR code.' });
+    }
+
+    order.status = 'COMPLETED';
+    order.completedAt = new Date();
+    order.handoverToken = null; // single-use
+    order.updatedAt = new Date();
+    await order.save();
+
+    await Product.findByIdAndUpdate(order.productId, {
+      status: 'SOLD',
+      isActive: false,
+      updatedAt: new Date()
+    });
+
+    await notifySeller(order, 'Buyer confirmed handover', `${order.buyerName || 'The buyer'} scanned the QR code and confirmed receipt of "${order.productTitle}".`);
+
+    res.json({ message: 'Handover confirmed — order completed!', order });
+  } catch (error) {
+    console.error('Confirm handover error:', error);
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };

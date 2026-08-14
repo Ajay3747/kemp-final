@@ -55,4 +55,22 @@ const notificationSchema = new mongoose.Schema({
   }
 });
 
+// Every existing call site creates notifications via either Notification.create
+// (post('save') fires) or Notification.insertMany (post('save') does NOT fire
+// for insertMany — post('insertMany') is the separate hook Mongoose provides
+// for that). Together these two cover all 11 current call sites (orderController,
+// bloodRequestController, adminController, chatController, communityController,
+// warrantyReminderJob) with zero changes needed to any of them — push delivery
+// is a property of "a Notification got created," not something each feature
+// has to remember to also do.
+notificationSchema.post('save', function (doc) {
+  const { deliverPush } = require('../services/pushService');
+  deliverPush(doc).catch((err) => console.error('Push delivery failed:', err.message));
+});
+
+notificationSchema.post('insertMany', function (docs) {
+  const { deliverPush } = require('../services/pushService');
+  Promise.all(docs.map((doc) => deliverPush(doc).catch((err) => console.error('Push delivery failed:', err.message))));
+});
+
 module.exports = mongoose.model('Notification', notificationSchema);

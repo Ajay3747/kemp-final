@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, User, Package, Check, ArrowRight, Trash2, Clock, XCircle, CheckCircle2 } from 'lucide-react';
+import { X, User, Package, Check, ArrowRight, Trash2, Clock, XCircle, CheckCircle2, QrCode } from 'lucide-react';
 
 const FLOW_STEPS = [
   { key: 'PENDING', label: 'Deal Requested' },
@@ -27,7 +27,7 @@ const STATUS_LABELS = {
  * component only renders and delegates; it holds no order/notification logic
  * of its own.
  */
-export default function OrderDetailModal({ notification, order, updating, onUpdateStatus, onDelete, onClose, showActions = true }) {
+export default function OrderDetailModal({ notification, order, updating, onUpdateStatus, onShowQr, onDelete, onClose, showActions = true }) {
   if (!notification && !order) return null;
 
   const isTerminalStop = order && (order.status === 'CANCELLED' || order.status === 'REJECTED');
@@ -202,13 +202,25 @@ export default function OrderDetailModal({ notification, order, updating, onUpda
                   </button>
                 )}
                 {order.status === 'READY_FOR_HANDOVER' && (
-                  <button
-                    onClick={() => onUpdateStatus('COMPLETED')}
-                    disabled={updating}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-green-500 hover:bg-green-600 rounded-xl font-semibold transition disabled:opacity-50"
-                  >
-                    <Check size={18} /> Mark Completed
-                  </button>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      onClick={onShowQr}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-green-500 hover:bg-green-600 rounded-xl font-semibold transition"
+                    >
+                      <QrCode size={18} /> Show QR to Buyer
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm("The buyer hasn't scanned the QR code yet. Mark this order completed anyway?")) {
+                          onUpdateStatus('COMPLETED');
+                        }
+                      }}
+                      disabled={updating}
+                      className="text-xs text-white/40 hover:text-white/70 underline disabled:opacity-50"
+                    >
+                      Mark completed manually
+                    </button>
+                  </div>
                 )}
                 {['ACCEPTED', 'PROCESSING'].includes(order.status) && (
                   <button

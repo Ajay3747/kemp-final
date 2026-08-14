@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Package, User, Calendar, Check, ArrowRight, X, ShoppingBag, ClipboardList, Mail, Phone, Trash2, Star, ShieldCheck } from 'lucide-react';
+import { Package, User, Calendar, Check, ArrowRight, X, ShoppingBag, ClipboardList, Mail, Phone, Trash2, Star, ShieldCheck, QrCode } from 'lucide-react';
 import OrderDetailModal from '../components/OrderDetailModal';
 import RateSellerModal from '../components/RateSellerModal';
+import HandoverQRModal from '../components/HandoverQRModal';
+import QRScannerModal from '../components/QRScannerModal';
 import { getMyRatings } from '../utils/ratingApi';
 import { getMyWarranties } from '../utils/warrantyApi';
 
@@ -48,6 +50,8 @@ export default function MyOrders() {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [myRatingsByOrder, setMyRatingsByOrder] = useState({});
   const [rateModalOrder, setRateModalOrder] = useState(null);
+  const [qrOrder, setQrOrder] = useState(null);
+  const [scanOrder, setScanOrder] = useState(null);
   const autoOpenedRef = useRef(false);
   const highlightRef = useRef(null);
 
@@ -341,7 +345,20 @@ export default function MyOrders() {
                       </>
                     )}
                     {order.status === 'READY_FOR_HANDOVER' && (
-                      <ActionBtn label="Mark Completed" icon={Check} color="green" busy={updatingId === order._id} onClick={() => updateStatus(order._id, 'COMPLETED')} />
+                      <>
+                        <ActionBtn label="Show QR to Buyer" icon={QrCode} color="green" busy={false} onClick={() => setQrOrder(order)} />
+                        <button
+                          onClick={() => {
+                            if (window.confirm("The buyer hasn't scanned the QR code yet. Mark this order completed anyway?")) {
+                              updateStatus(order._id, 'COMPLETED');
+                            }
+                          }}
+                          disabled={updatingId === order._id}
+                          className="text-xs text-white/40 hover:text-white/70 underline disabled:opacity-50 self-center"
+                        >
+                          Mark completed manually
+                        </button>
+                      </>
                     )}
                     <button
                       onClick={() => setDetailOrder(order)}
@@ -417,6 +434,11 @@ export default function MyOrders() {
                 {CANCELLABLE_BUYER_STATUSES.includes(order.status) && (
                   <div className="flex mt-3 pt-3 border-t border-white/10">
                     <ActionBtn label="Cancel Deal" icon={X} color="neutral" busy={updatingId === order._id} onClick={() => cancelAsBuyer(order._id)} />
+                  </div>
+                )}
+                {order.status === 'READY_FOR_HANDOVER' && (
+                  <div className="flex mt-3 pt-3 border-t border-white/10">
+                    <ActionBtn label="Scan QR to Confirm" icon={QrCode} color="yellow" busy={false} onClick={() => setScanOrder(order)} />
                   </div>
                 )}
                 {order.status === 'COMPLETED' && (
@@ -507,7 +529,23 @@ export default function MyOrders() {
           order={detailOrder}
           updating={updatingId === detailOrder._id}
           onUpdateStatus={(status) => updateStatus(detailOrder._id, status)}
+          onShowQr={() => setQrOrder(detailOrder)}
           onClose={() => setDetailOrder(null)}
+        />
+      )}
+
+      {qrOrder && (
+        <HandoverQRModal order={qrOrder} onClose={() => setQrOrder(null)} />
+      )}
+
+      {scanOrder && (
+        <QRScannerModal
+          order={scanOrder}
+          onClose={() => setScanOrder(null)}
+          onConfirmed={(updatedOrder) => {
+            setPurchaseOrders((prev) => prev.map((o) => (o._id === updatedOrder._id ? updatedOrder : o)));
+            setScanOrder(null);
+          }}
         />
       )}
 

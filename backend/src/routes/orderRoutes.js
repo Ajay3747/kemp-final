@@ -11,6 +11,7 @@ router.get('/warranties/mine', isAuthenticated, orderController.getMyWarranties)
 router.get('/:orderId', isAuthenticated, orderController.getOrder);
 router.patch('/:orderId/status', isAuthenticated, orderController.updateOrderStatus);
 router.patch('/:orderId/cancel', isAuthenticated, orderController.cancelOrder);
+router.post('/:orderId/confirm-handover', isAuthenticated, orderController.confirmHandover);
 router.post('/history/delete', isAuthenticated, orderController.deleteHistoryRecords);
 
 module.exports = router;
